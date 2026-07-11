@@ -4,6 +4,9 @@
 #include <limits.h>
 #include <time.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 #define GLFW_INCLUDE_VULKAN
 #include "GLFW/glfw3.h"
 
@@ -239,6 +242,21 @@ int main(int argc, char* argv[]) {
 	glfwWindowHint(GLFW_RESIZABLE,GLFW_FALSE);
 	GLFWwindow *window = glfwCreateWindow(1280,720,"Tracerlite",NULL,NULL);
 	printf("window created.\n");
+
+	GLFWimage images[3];
+	images[0].pixels = stbi_load("icon_32.png", &images[0].width, &images[0].height, 0, 4);
+	images[1].pixels = stbi_load("icon_64.png", &images[1].width, &images[1].height, 0, 4);
+	images[2].pixels = stbi_load("icon_128.png", &images[2].width, &images[2].height, 0, 4);
+
+	if (images[0].pixels && images[1].pixels && images[2].pixels) {
+		glfwSetWindowIcon(window, 3, images); 
+	} else {printf("Icon failed.\n");}
+	
+	if (images[0].pixels) stbi_image_free(images[0].pixels);
+	if (images[1].pixels) stbi_image_free(images[1].pixels);
+	if (images[2].pixels) stbi_image_free(images[2].pixels);
+
+
 	VkSurfaceKHR surf;
 	glfwCreateWindowSurface(inst,window,NULL,&surf);
 	printf("surface created.\n");
