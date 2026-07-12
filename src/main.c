@@ -4,13 +4,31 @@
 #include <limits.h>
 #include <time.h>
 
+#include "vulkan_simple.h"
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 #define GLFW_INCLUDE_VULKAN
 #include "GLFW/glfw3.h"
 
+
+
 int main(int argc, char* argv[]) {
+	Display_t display;
+	display_init(&display);
+
+	while(!glfwWindowShouldClose(display.window)){
+		glfwPollEvents();
+
+		display_run(&display);
+	}
+
+	display_close(&display);
+	return 0;
+}
+
+int main_old(int argc, char* argv[]) {
     //if (argc > 1) {if (strcmp(argv[1], "--Lan") == 0) {}}
     glfwInit();
 

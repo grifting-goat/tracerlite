@@ -39,6 +39,7 @@ endif()
 set(VERT_SPV ${CMAKE_SOURCE_DIR}/shaders/vert.spv)
 set(FRAG_SPV ${CMAKE_SOURCE_DIR}/shaders/frag.spv)
 
+# Complile shaders at build for now
 add_custom_command(
     OUTPUT ${VERT_SPV}
     COMMAND ${GLSLC_EXECUTABLE} ${CMAKE_SOURCE_DIR}/shaders/shader.vert -o ${VERT_SPV}
