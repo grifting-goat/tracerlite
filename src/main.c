@@ -30,201 +30,199 @@ int main(int argc, char* argv[]) {
 	app_info.apiVersion=VK_API_VERSION_1_4;
 
 	// create instance info
-	VkInstanceCreateInfo inst_cre_info;
-	inst_cre_info.sType=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-	inst_cre_info.pNext=NULL;
-	inst_cre_info.flags=0;
-	inst_cre_info.pApplicationInfo=&app_info;
-	uint32_t inst_layer_count = 1U;
-	inst_cre_info.enabledLayerCount=inst_layer_count;
-	char pp_inst_layers[inst_layer_count][VK_MAX_EXTENSION_NAME_SIZE];
-	strcpy(pp_inst_layers[0],"VK_LAYER_KHRONOS_validation");
-	char *pp_inst_layer_names[inst_layer_count];
-	for(uint32_t i=0;i<inst_layer_count;i++){
-		pp_inst_layer_names[i]=
-			pp_inst_layers[i];
+	VkInstanceCreateInfo instance_create_info;
+	instance_create_info.sType=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+	instance_create_info.pNext=NULL;
+	instance_create_info.flags=0;
+	instance_create_info.pApplicationInfo=&app_info;
+	uint32_t instance_layer_count = 1U;
+	instance_create_info.enabledLayerCount=instance_layer_count;
+	char pp_instance_layers[instance_layer_count][VK_MAX_EXTENSION_NAME_SIZE];
+	strcpy(pp_instance_layers[0],"VK_LAYER_KHRONOS_validation");
+	char *pp_instance_layer_names[instance_layer_count];
+	for(uint32_t i=0;i<instance_layer_count;i++){
+		pp_instance_layer_names[i]=
+			pp_instance_layers[i];
 	}
-	inst_cre_info.ppEnabledLayerNames=(const char * const *)pp_inst_layer_names;
-	uint32_t inst_ext_count=0;
-	const char * const *pp_inst_ext_names=glfwGetRequiredInstanceExtensions(&inst_ext_count);
-	inst_cre_info.enabledExtensionCount=inst_ext_count;
-	inst_cre_info.ppEnabledExtensionNames=pp_inst_ext_names;
+	instance_create_info.ppEnabledLayerNames=(const char * const *)pp_instance_layer_names;
+	uint32_t instance_extension_count=0;
+	const char * const *pp_instance_extension_names=glfwGetRequiredInstanceExtensions(&instance_extension_count);
+	instance_create_info.enabledExtensionCount=instance_extension_count;
+	instance_create_info.ppEnabledExtensionNames=pp_instance_extension_names;
 
 	//create instance
-	VkInstance inst;
+	VkInstance instance;
 
-	vkCreateInstance(&inst_cre_info, NULL, &inst);
+	vkCreateInstance(&instance_create_info, NULL, &instance);
 	printf("instance created.\n");
 
 
 	//enum physical device
 	//
-	uint32_t phy_devi_count=0;
-	vkEnumeratePhysicalDevices(inst,&phy_devi_count,NULL);
+	uint32_t physical_device_count=0;
+	vkEnumeratePhysicalDevices(instance,&physical_device_count,NULL);
 
-	VkPhysicalDevice phy_devis[phy_devi_count];
-	vkEnumeratePhysicalDevices(inst,&phy_devi_count,phy_devis);
+	VkPhysicalDevice physical_device[physical_device_count];
+	vkEnumeratePhysicalDevices(instance,&physical_device_count,physical_device);
 
 	/*
 	select physical device
 	*/
-	VkPhysicalDeviceProperties phy_devis_props[phy_devi_count];
-	uint32_t discrete_gpu_list[phy_devi_count];
+	VkPhysicalDeviceProperties physical_device_properties[physical_device_count];
+	uint32_t discrete_gpu_list[physical_device_count];
 	uint32_t discrete_gpu_count=0;
-	uint32_t intergrated_gpu_list[phy_devi_count];
+	uint32_t intergrated_gpu_list[physical_device_count];
 	uint32_t intergrated_gpu_count=0;
 
-	VkPhysicalDeviceMemoryProperties phy_devis_mem_props[phy_devi_count];
-	uint32_t phy_devis_mem_count[phy_devi_count];
-	VkDeviceSize phy_devis_mem_total[phy_devi_count];
-	VkDeviceSize phy_devis_mem_vram[phy_devi_count];
+	VkPhysicalDeviceMemoryProperties physical_device_memory_properties[physical_device_count];
+	uint32_t physical_device_memory_count[physical_device_count];
+	VkDeviceSize physical_device_memory_total[physical_device_count];
+	VkDeviceSize physical_device_memory_vram[physical_device_count];
 
-	for(uint32_t i=0;i<phy_devi_count;i++){
-		vkGetPhysicalDeviceProperties(phy_devis[i],&phy_devis_props[i]);
-		if(phy_devis_props[i].deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU){
+	for(uint32_t i=0;i<physical_device_count;i++){
+		vkGetPhysicalDeviceProperties(physical_device[i],&physical_device_properties[i]);
+		if(physical_device_properties[i].deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU){
 			discrete_gpu_list[discrete_gpu_count]=i;
 			discrete_gpu_count++;
-		} else if(phy_devis_props[i].deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU){
+		} else if(physical_device_properties[i].deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU){
 			intergrated_gpu_list[intergrated_gpu_count]=i;
 			intergrated_gpu_count++;
 		}
 
-		vkGetPhysicalDeviceMemoryProperties(phy_devis[i],&phy_devis_mem_props[i]);
-		phy_devis_mem_count[i] = phy_devis_mem_props[i].memoryHeapCount;
-		phy_devis_mem_total[i]=0;
-		phy_devis_mem_vram[i]=0;
-		for(uint32_t j=0;j<phy_devis_mem_count[i];j++){
-			phy_devis_mem_total[i] += phy_devis_mem_props[i].memoryHeaps[j].size;
-			if(phy_devis_mem_props[i].memoryHeaps[j].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT){
-				phy_devis_mem_vram[i] += phy_devis_mem_props[i].memoryHeaps[j].size;
+		vkGetPhysicalDeviceMemoryProperties(physical_device[i],&physical_device_memory_properties[i]);
+		physical_device_memory_count[i] = physical_device_memory_properties[i].memoryHeapCount;
+		physical_device_memory_total[i]=0;
+		physical_device_memory_vram[i]=0;
+		for(uint32_t j=0;j<physical_device_memory_count[i];j++){
+			physical_device_memory_total[i] += physical_device_memory_properties[i].memoryHeaps[j].size;
+			if(physical_device_memory_properties[i].memoryHeaps[j].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT){
+				physical_device_memory_vram[i] += physical_device_memory_properties[i].memoryHeaps[j].size;
 			}
 		}
 	}
 
-	VkDeviceSize max_mem_size=0;
-	uint32_t phy_devi_best_index=0;
+	VkDeviceSize max_memory_size=0;
+	uint32_t physical_device_best_index=0;
 
 	if(discrete_gpu_count!=0){
 		for(uint32_t i=0;i<discrete_gpu_count;i++){
-			if(phy_devis_mem_total[i]>max_mem_size){
-				phy_devi_best_index=discrete_gpu_list[i];
-				max_mem_size=phy_devis_mem_total[i];
+			if(physical_device_memory_total[i]>max_memory_size){
+				physical_device_best_index=discrete_gpu_list[i];
+				max_memory_size=physical_device_memory_total[i];
 			}
 		}
 	} else if(intergrated_gpu_count!=0){
 		for(uint32_t i=0;i<intergrated_gpu_count;i++){
-			if(phy_devis_mem_total[i]>max_mem_size){
-				phy_devi_best_index=intergrated_gpu_list[i];
-				max_mem_size=phy_devis_mem_total[i];
+			if(physical_device_memory_total[i]>max_memory_size){
+				physical_device_best_index=intergrated_gpu_list[i];
+				max_memory_size=physical_device_memory_total[i];
 			}
 		}
 	}
 
 	// Print Best Device
-	printf("best device index:%u\n",phy_devi_best_index);
-	printf("device name:%s\n",phy_devis_props[phy_devi_best_index].deviceName);
+	printf("best device index:%u\n",physical_device_best_index);
+	printf("device name:%s\n",physical_device_properties[physical_device_best_index].deviceName);
 	printf("device type:");
 
 	if(discrete_gpu_count!=0){printf("discrete gpu\n");}
 	else if(intergrated_gpu_count!=0){printf("intergrated gpu\n");}
 	else{printf("unknown\n");}
 
-	printf("memory total:%llu\n",phy_devis_mem_total[phy_devi_best_index]);
-	double mem_gb = (double)phy_devis_mem_vram[phy_devi_best_index] / (1024 * 1024 * 1024);
+	printf("memory total:%llu\n",physical_device_memory_total[physical_device_best_index]);
+	double mem_gb = (double)physical_device_memory_vram[physical_device_best_index] / (1073741824.0);
 	printf("memory total:%.3f GB\n", mem_gb);
 
-	VkPhysicalDevice *phy_best_devi=&(phy_devis[phy_devi_best_index]);
+	VkPhysicalDevice *physical_device_best = &(physical_device[physical_device_best_index]);
 
 	//query que families
-	uint32_t qf_prop_count=0;
-	vkGetPhysicalDeviceQueueFamilyProperties(*phy_best_devi,&qf_prop_count,NULL);
-	VkQueueFamilyProperties qf_props[qf_prop_count];
-	vkGetPhysicalDeviceQueueFamilyProperties(*phy_best_devi,&qf_prop_count,qf_props);
+	uint32_t queue_family_prop_count=0;
+	vkGetPhysicalDeviceQueueFamilyProperties(*physical_device_best,&queue_family_prop_count,NULL);
+	VkQueueFamilyProperties queue_family_props[queue_family_prop_count];
+	vkGetPhysicalDeviceQueueFamilyProperties(*physical_device_best,&queue_family_prop_count,queue_family_props);
 
-	uint32_t qf_q_count[qf_prop_count];
-	for(uint32_t i=0;i<qf_prop_count;i++){
-		qf_q_count[i]=qf_props[i].queueCount;
+	uint32_t queue_family_queue_count[queue_family_prop_count];
+	for(uint32_t i=0;i<queue_family_prop_count;i++){
+		queue_family_queue_count[i]=queue_family_props[i].queueCount;
 	}
 
 	//create logical device
-	VkDeviceQueueCreateInfo dev_q_cre_infos[qf_prop_count];
-	float *q_priors[qf_prop_count];
-	for(uint32_t i=0;i<qf_prop_count;i++){
-		dev_q_cre_infos[i].sType=VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		dev_q_cre_infos[i].pNext=NULL;
-		dev_q_cre_infos[i].flags=0;
-		dev_q_cre_infos[i].queueFamilyIndex=i;
-		dev_q_cre_infos[i].queueCount=qf_q_count[i];
-		q_priors[i]=malloc(qf_q_count[i]*sizeof(float));
-		for(uint32_t j=0;j<qf_q_count[i];j++){
-			q_priors[i][j]=1.0f;
+	VkDeviceQueueCreateInfo device_queue_create_infos[queue_family_prop_count];
+	float *queue_priors[queue_family_prop_count];
+	for(uint32_t i=0;i<queue_family_prop_count;i++){
+		device_queue_create_infos[i].sType=VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		device_queue_create_infos[i].pNext=NULL;
+		device_queue_create_infos[i].flags=0;
+		device_queue_create_infos[i].queueFamilyIndex=i;
+		device_queue_create_infos[i].queueCount=queue_family_queue_count[i];
+		queue_priors[i]=malloc(queue_family_queue_count[i]*sizeof(float));
+		for(uint32_t j=0;j<queue_family_queue_count[i];j++){
+			queue_priors[i][j]=1.0f;
 		}
-		dev_q_cre_infos[i].pQueuePriorities=q_priors[i];
+		device_queue_create_infos[i].pQueuePriorities=queue_priors[i];
 	}
-	printf("using %d queue families.\n",qf_prop_count);
+	printf("using %d queue families.\n",queue_family_prop_count);
 
-	VkDeviceCreateInfo dev_cre_info;
-	dev_cre_info.sType=VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	dev_cre_info.pNext=NULL;
-	dev_cre_info.flags=0;
-	dev_cre_info.queueCreateInfoCount=qf_prop_count;
-	dev_cre_info.pQueueCreateInfos=dev_q_cre_infos;
-	dev_cre_info.enabledLayerCount=0;
-	dev_cre_info.ppEnabledLayerNames=NULL;
+	VkDeviceCreateInfo device_create_info;
+	device_create_info.sType=VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	device_create_info.pNext=NULL;
+	device_create_info.flags=0;
+	device_create_info.queueCreateInfoCount=queue_family_prop_count;
+	device_create_info.pQueueCreateInfos=device_queue_create_infos;
+	device_create_info.enabledLayerCount=0;
+	device_create_info.ppEnabledLayerNames=NULL;
 
-	uint32_t dev_ext_count=1;
-	dev_cre_info.enabledExtensionCount=dev_ext_count;
-	char pp_dev_exts[dev_ext_count][VK_MAX_EXTENSION_NAME_SIZE];
-	strcpy(pp_dev_exts[0],"VK_KHR_swapchain");
-	char *pp_dev_ext_names[dev_ext_count];
-	for(uint32_t i=0;i<dev_ext_count;i++){
-		pp_dev_ext_names[i]=pp_dev_exts[i];
+	uint32_t device_extension_count=1;
+	device_create_info.enabledExtensionCount=device_extension_count;
+	char pp_device_extensions[device_extension_count][VK_MAX_EXTENSION_NAME_SIZE];
+	strcpy(pp_device_extensions[0],"VK_KHR_swapchain");
+	char *pp_device_extension_names[device_extension_count];
+	for(uint32_t i=0;i<device_extension_count;i++){
+		pp_device_extension_names[i]=pp_device_extensions[i];
 	}
-	dev_cre_info.ppEnabledExtensionNames=
-		(const char * const *)pp_dev_ext_names;
+	device_create_info.ppEnabledExtensionNames=
+		(const char * const *)pp_device_extension_names;
 
-	VkPhysicalDeviceFeatures phy_devi_feat;
-	vkGetPhysicalDeviceFeatures(*phy_best_devi,&phy_devi_feat);
-	dev_cre_info.pEnabledFeatures=&phy_devi_feat;
+	VkPhysicalDeviceFeatures physical_device_features;
+	vkGetPhysicalDeviceFeatures(*physical_device_best,&physical_device_features);
+	device_create_info.pEnabledFeatures=&physical_device_features;
 
-	VkDevice dev;
-	vkCreateDevice(*phy_best_devi,&dev_cre_info,NULL,&dev);
+	VkDevice device;
+	vkCreateDevice(*physical_device_best,&device_create_info,NULL,&device);
 	printf("logical device created.\n");
 
-	for(uint32_t i=0;i<qf_prop_count;i++){
-		free(q_priors[i]);
-	}
+	for(uint32_t i=0;i<queue_family_prop_count;i++){free(queue_priors[i]);}
 
 
 	//select best queue
-	uint32_t qf_graph_count=0;
-	uint32_t qf_graph_list[qf_prop_count];
-	for(uint32_t i=0;i<qf_prop_count;i++){
-		if((qf_props[i].queueFlags&VK_QUEUE_GRAPHICS_BIT) != 0){
-			qf_graph_list[qf_graph_count]=i;
-			qf_graph_count++;
+	uint32_t queue_family_graph_count=0;
+	uint32_t queue_family_graph_list[queue_family_prop_count];
+	for(uint32_t i=0;i<queue_family_prop_count;i++){
+		if((queue_family_props[i].queueFlags&VK_QUEUE_GRAPHICS_BIT) != 0){
+			queue_family_graph_list[queue_family_graph_count]=i;
+			queue_family_graph_count++;
 		}
 	}
 
-	uint32_t max_q_count=0;
-	uint32_t qf_best_index=0;
-	for(uint32_t i=0;i<qf_graph_count;i++){
-		if(qf_props[qf_graph_list[i]].queueCount>max_q_count){
-			qf_best_index=qf_graph_list[i];
-			max_q_count=qf_props[qf_graph_list[i]].queueCount;
+	uint32_t max_queue_count=0;
+	uint32_t queue_family_best_index=0;
+	for(uint32_t i=0;i<queue_family_graph_count;i++){
+		if(queue_family_props[queue_family_graph_list[i]].queueCount>max_queue_count){
+			queue_family_best_index=queue_family_graph_list[i];
+			max_queue_count=queue_family_props[queue_family_graph_list[i]].queueCount;
 		}
 	}
-	printf("best queue family index:%d\n",qf_best_index);
+	printf("best queue family index:%d\n",queue_family_best_index);
 
-	VkQueue q_graph,q_pres;
-	vkGetDeviceQueue(dev,qf_best_index,0,&q_graph);
+	VkQueue queue_graph, queue_present;
+	vkGetDeviceQueue(device,queue_family_best_index,0,&queue_graph);
 	char single_queue=1;
-	if(qf_props[qf_best_index].queueCount<2){
-		vkGetDeviceQueue(dev,qf_best_index,0,&q_pres);
+	if(queue_family_props[queue_family_best_index].queueCount<2){
+		vkGetDeviceQueue(device,queue_family_best_index,0,&queue_present);
 		printf("using single queue for drawing.\n");
 	}else{
 		single_queue=0;
-		vkGetDeviceQueue(dev,qf_best_index,1,&q_pres);
+		vkGetDeviceQueue(device,queue_family_best_index,1,&queue_present);
 		printf("using double queues for drawing.\n");
 	}
 
@@ -243,95 +241,92 @@ int main(int argc, char* argv[]) {
 	GLFWwindow *window = glfwCreateWindow(1280,720,"Tracerlite",NULL,NULL);
 	printf("window created.\n");
 
-	GLFWimage images[3];
-	images[0].pixels = stbi_load("icon_32.png", &images[0].width, &images[0].height, 0, 4);
-	images[1].pixels = stbi_load("icon_64.png", &images[1].width, &images[1].height, 0, 4);
-	images[2].pixels = stbi_load("icon_128.png", &images[2].width, &images[2].height, 0, 4);
+	GLFWimage icons[3];
+	icons[0].pixels = stbi_load("icon_32.png", &icons[0].width, &icons[0].height, 0, 4);
+	icons[1].pixels = stbi_load("icon_64.png", &icons[1].width, &icons[1].height, 0, 4);
+	icons[2].pixels = stbi_load("icon_128.png", &icons[2].width, &icons[2].height, 0, 4);
 
-	if (images[0].pixels && images[1].pixels && images[2].pixels) {
-		glfwSetWindowIcon(window, 3, images); 
+	if (icons[0].pixels && icons[1].pixels && icons[2].pixels) {
+		glfwSetWindowIcon(window, 3, icons); 
 	} else {printf("Icon failed.\n");}
 	
-	if (images[0].pixels) stbi_image_free(images[0].pixels);
-	if (images[1].pixels) stbi_image_free(images[1].pixels);
-	if (images[2].pixels) stbi_image_free(images[2].pixels);
+	if (icons[0].pixels) stbi_image_free(icons[0].pixels);
+	if (icons[1].pixels) stbi_image_free(icons[1].pixels);
+	if (icons[2].pixels) stbi_image_free(icons[2].pixels);
 
 
-	VkSurfaceKHR surf;
-	glfwCreateWindowSurface(inst,window,NULL,&surf);
+	VkSurfaceKHR surface;
+	glfwCreateWindowSurface(instance,window,NULL,&surface);
 	printf("surface created.\n");
 
 	//verify surface support
-    VkBool32 phy_surf_supported;
-	vkGetPhysicalDeviceSurfaceSupportKHR(*phy_best_devi,qf_best_index,surf,&phy_surf_supported);
+    VkBool32 phyical_surface_supported;
+	vkGetPhysicalDeviceSurfaceSupportKHR(*physical_device_best,queue_family_best_index,surface,&phyical_surface_supported);
 
-	if(phy_surf_supported==VK_TRUE){printf("surface supported.\n");}
+	if(phyical_surface_supported==VK_TRUE){printf("surface supported.\n");}
 	else{printf("warning:surface unsupported!\n");}
 
 	//fetch surface capabilities
 
-	VkSurfaceCapabilitiesKHR surf_caps;
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(*phy_best_devi,surf,&surf_caps);
+	VkSurfaceCapabilitiesKHR surface_capabilities;
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(*physical_device_best,surface,&surface_capabilities);
 	printf("fetched caps from surface.\n");
 	char extent_suitable=1;
-	int wind_w,wind_h;
-	glfwGetFramebufferSize(window,&wind_w,&wind_h);
+	int window_w,window_h;
+	glfwGetFramebufferSize(window,&window_w,&window_h);
 	VkExtent2D actual_extent;
-	actual_extent.width=wind_w;
-	actual_extent.height=wind_h;
-	if(surf_caps.currentExtent.width
-			!=wind_w
-			||surf_caps.currentExtent.height
-			!=wind_h){
+	actual_extent.width=window_w;
+	actual_extent.height=window_h;
+	if(surface_capabilities.currentExtent.width != window_w || surface_capabilities.currentExtent.height != window_h){
 
 		extent_suitable=0;
 		printf("actual extent size doesn't match framebuffers, resizing...\n");
 		actual_extent.width=
-			wind_w>surf_caps
+			window_w>surface_capabilities
 			.maxImageExtent.width?
-			surf_caps
+			surface_capabilities
 			.maxImageExtent.width
-			:wind_w;
+			:window_w;
 		actual_extent.width=
-			wind_w<surf_caps
+			window_w<surface_capabilities
 			.minImageExtent.width?
-			surf_caps
+			surface_capabilities
 			.minImageExtent.width
-			:wind_w;
+			:window_w;
 		actual_extent.height=
-			wind_h>surf_caps
+			window_h>surface_capabilities
 			.maxImageExtent.height?
-			surf_caps
+			surface_capabilities
 			.maxImageExtent.height
-			:wind_h;
+			:window_h;
 		actual_extent.height=
-			wind_h<surf_caps
+			window_h<surface_capabilities
 			.minImageExtent.height?
-			surf_caps
+			surface_capabilities
 			.minImageExtent.height
-			:wind_h;
+			:window_h;
 	}
 
 	//fetch surface formats
-	uint32_t surf_form_count;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(*phy_best_devi,surf,&surf_form_count,NULL);
-	VkSurfaceFormatKHR surf_forms[surf_form_count];
-	vkGetPhysicalDeviceSurfaceFormatsKHR(*phy_best_devi,surf,&surf_form_count,surf_forms);
-	printf("fetched %d surface formats.\n",surf_form_count);
-	for(uint32_t i=0;i<surf_form_count;i++){
-		printf("format:%d\tcolorspace:%d\n",surf_forms[i].format,surf_forms[i].colorSpace);
+	uint32_t surface_form_count;
+	vkGetPhysicalDeviceSurfaceFormatsKHR(*physical_device_best,surface,&surface_form_count,NULL);
+	VkSurfaceFormatKHR surface_formats[surface_form_count];
+	vkGetPhysicalDeviceSurfaceFormatsKHR(*physical_device_best,surface,&surface_form_count,surface_formats);
+	printf("fetched %d surface formats.\n",surface_form_count);
+	for(uint32_t i=0;i<surface_form_count;i++){
+		printf("format:%d\tcolorspace:%d\n",surface_formats[i].format,surface_formats[i].colorSpace);
 	}
 
 	//fetch surface present mode
-	uint32_t pres_mode_count;
-	vkGetPhysicalDeviceSurfacePresentModesKHR(*phy_best_devi,surf,&pres_mode_count,NULL);
-	VkPresentModeKHR pres_modes[pres_mode_count];
-	vkGetPhysicalDeviceSurfacePresentModesKHR(*phy_best_devi,surf,&pres_mode_count,pres_modes);
-	printf("fetched %d present modes.\n",pres_mode_count);
+	uint32_t present_mode_count;
+	vkGetPhysicalDeviceSurfacePresentModesKHR(*physical_device_best,surface,&present_mode_count,NULL);
+	VkPresentModeKHR present_modes[present_mode_count];
+	vkGetPhysicalDeviceSurfacePresentModesKHR(*physical_device_best,surface,&present_mode_count,present_modes);
+	printf("fetched %d present modes.\n",present_mode_count);
 	char mailbox_mode_supported=0;
-	for(uint32_t i=0;i<pres_mode_count;i++){
-		printf("present mode:%d\n",pres_modes[i]);
-		if(pres_modes[i]==VK_PRESENT_MODE_MAILBOX_KHR){
+	for(uint32_t i=0;i<present_mode_count;i++){
+		printf("present mode:%d\n",present_modes[i]);
+		if(present_modes[i]==VK_PRESENT_MODE_MAILBOX_KHR){
 			printf("mailbox present mode supported.\n");
 			mailbox_mode_supported=1;
 		}
@@ -339,60 +334,57 @@ int main(int argc, char* argv[]) {
 
 	//create swapchain
 
-	VkSwapchainCreateInfoKHR swap_cre_info;
-	swap_cre_info.sType=VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-	swap_cre_info.pNext=NULL;
-	swap_cre_info.flags=0;
-	swap_cre_info.surface=surf;
-	swap_cre_info.minImageCount=surf_caps.minImageCount+1;
-	swap_cre_info.imageFormat=surf_forms[0].format;
-	swap_cre_info.imageColorSpace=surf_forms[0].colorSpace;
-	swap_cre_info.imageExtent = extent_suitable ? surf_caps.currentExtent : actual_extent;
-	swap_cre_info.imageArrayLayers=1;
-	swap_cre_info.imageUsage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-	swap_cre_info.imageSharingMode = single_queue? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT;
-	swap_cre_info.queueFamilyIndexCount = single_queue ? 0 : 2;
+	VkSwapchainCreateInfoKHR swap_create_info;
+	swap_create_info.sType=VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	swap_create_info.pNext=NULL;
+	swap_create_info.flags=0;
+	swap_create_info.surface=surface;
+	swap_create_info.minImageCount=surface_capabilities.minImageCount+1;
+	swap_create_info.imageFormat=surface_formats[0].format;
+	swap_create_info.imageColorSpace=surface_formats[0].colorSpace;
+	swap_create_info.imageExtent = extent_suitable ? surface_capabilities.currentExtent : actual_extent;
+	swap_create_info.imageArrayLayers=1;
+	swap_create_info.imageUsage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	swap_create_info.imageSharingMode = single_queue? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT;
+	swap_create_info.queueFamilyIndexCount = single_queue ? 0 : 2;
 	uint32_t qf_indices[2]={0,1};
-	swap_cre_info.pQueueFamilyIndices = single_queue ? NULL : qf_indices;
-	swap_cre_info.preTransform=surf_caps.currentTransform;
-	swap_cre_info.compositeAlpha=VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-	swap_cre_info.presentMode = mailbox_mode_supported ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_FIFO_KHR;
-	swap_cre_info.clipped=VK_TRUE;
-	swap_cre_info.oldSwapchain=VK_NULL_HANDLE;
+	swap_create_info.pQueueFamilyIndices = single_queue ? NULL : qf_indices;
+	swap_create_info.preTransform=surface_capabilities.currentTransform;
+	swap_create_info.compositeAlpha=VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	swap_create_info.presentMode = mailbox_mode_supported ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_FIFO_KHR;
+	swap_create_info.clipped=VK_TRUE;
+	swap_create_info.oldSwapchain=VK_NULL_HANDLE;
 
 	VkSwapchainKHR swap;
-	vkCreateSwapchainKHR(dev,&swap_cre_info,NULL,&swap);
+	vkCreateSwapchainKHR(device,&swap_create_info,NULL,&swap);
 	printf("swapchain created.\n");
 
 	//fetch image from swapchain
 	
 	uint32_t swap_image_count=0;
-	vkGetSwapchainImagesKHR(dev,swap,&swap_image_count,NULL);
+	vkGetSwapchainImagesKHR(device,swap,&swap_image_count,NULL);
 	VkImage swap_images[swap_image_count];
-	vkGetSwapchainImagesKHR(dev,swap,&swap_image_count,swap_images);
+	vkGetSwapchainImagesKHR(device,swap,&swap_image_count,swap_images);
 	printf("%d images fetched from swapchain.\n",swap_image_count);
 
 
 	//create image view
 
-	VkImageView image_views
-		[swap_image_count];
-	VkImageViewCreateInfo
-		image_view_cre_infos
-		[swap_image_count];
+	VkImageView image_views[swap_image_count];
+	VkImageViewCreateInfo image_view_cre_infos[swap_image_count];
 
-	VkComponentMapping image_view_rgba_comp;
-	image_view_rgba_comp.r=VK_COMPONENT_SWIZZLE_IDENTITY;
-	image_view_rgba_comp.g=VK_COMPONENT_SWIZZLE_IDENTITY;
-	image_view_rgba_comp.b=VK_COMPONENT_SWIZZLE_IDENTITY;
-	image_view_rgba_comp.a=VK_COMPONENT_SWIZZLE_IDENTITY;
+	VkComponentMapping image_view_rgba_component;
+	image_view_rgba_component.r=VK_COMPONENT_SWIZZLE_IDENTITY;
+	image_view_rgba_component.g=VK_COMPONENT_SWIZZLE_IDENTITY;
+	image_view_rgba_component.b=VK_COMPONENT_SWIZZLE_IDENTITY;
+	image_view_rgba_component.a=VK_COMPONENT_SWIZZLE_IDENTITY;
 
-	VkImageSubresourceRange image_view_subres;
-	image_view_subres.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
-	image_view_subres.baseMipLevel=0;
-	image_view_subres.levelCount=1;
-	image_view_subres.baseArrayLayer=0;
-	image_view_subres.layerCount = swap_cre_info.imageArrayLayers;
+	VkImageSubresourceRange image_view_subresource;
+	image_view_subresource.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
+	image_view_subresource.baseMipLevel=0;
+	image_view_subresource.levelCount=1;
+	image_view_subresource.baseArrayLayer=0;
+	image_view_subresource.layerCount = swap_create_info.imageArrayLayers;
 
 	for(uint32_t i=0;i<swap_image_count;i++){
 		image_view_cre_infos[i].sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -400,11 +392,11 @@ int main(int argc, char* argv[]) {
 		image_view_cre_infos[i].flags=0;
 		image_view_cre_infos[i].image=swap_images[i];
 		image_view_cre_infos[i].viewType=VK_IMAGE_VIEW_TYPE_2D;
-		image_view_cre_infos[i].format=surf_forms[0].format;
-		image_view_cre_infos[i].components=image_view_rgba_comp;
-		image_view_cre_infos[i].subresourceRange=image_view_subres;
+		image_view_cre_infos[i].format=surface_formats[0].format;
+		image_view_cre_infos[i].components=image_view_rgba_component;
+		image_view_cre_infos[i].subresourceRange=image_view_subresource;
 
-		vkCreateImageView(dev,&image_view_cre_infos[i],NULL,&image_views[i]);
+		vkCreateImageView(device,&image_view_cre_infos[i],NULL,&image_views[i]);
 
 		printf("image view %d created.\n",i);
 	}
@@ -415,71 +407,71 @@ int main(int argc, char* argv[]) {
 
 	//fill attachment description
 
-	VkAttachmentDescription attach_descp;
-	attach_descp.flags=0;
-	attach_descp.format=swap_cre_info.imageFormat;
-	attach_descp.samples=VK_SAMPLE_COUNT_1_BIT;
-	attach_descp.loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR;
-	attach_descp.storeOp=VK_ATTACHMENT_STORE_OP_STORE;
-	attach_descp.stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attach_descp.stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attach_descp.initialLayout=VK_IMAGE_LAYOUT_UNDEFINED;
-	attach_descp.finalLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	VkAttachmentDescription attachment_descption;
+	attachment_descption.flags=0;
+	attachment_descption.format=swap_create_info.imageFormat;
+	attachment_descption.samples=VK_SAMPLE_COUNT_1_BIT;
+	attachment_descption.loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachment_descption.storeOp=VK_ATTACHMENT_STORE_OP_STORE;
+	attachment_descption.stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachment_descption.stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachment_descption.initialLayout=VK_IMAGE_LAYOUT_UNDEFINED;
+	attachment_descption.finalLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
 	printf("attachment description filled.\n");
 
 
 	//fill attachment reference
 	
-	VkAttachmentReference attach_ref;
-	attach_ref.attachment=0;
-	attach_ref.layout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	VkAttachmentReference attach_reference;
+	attach_reference.attachment=0;
+	attach_reference.layout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 	printf("attachment reference filled.\n");
 
 	//fill subpass description
 	
-	VkSubpassDescription subp_descp;
-	subp_descp.flags=0;
-	subp_descp.pipelineBindPoint=VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subp_descp.inputAttachmentCount=0;
-	subp_descp.pInputAttachments=NULL;
-	subp_descp.colorAttachmentCount=1;
-	subp_descp.pColorAttachments=&attach_ref;
-	subp_descp.pResolveAttachments=NULL;
-	subp_descp.pDepthStencilAttachment=NULL;
-	subp_descp.preserveAttachmentCount=0;
-	subp_descp.pPreserveAttachments=NULL;
+	VkSubpassDescription subpass_description;
+	subpass_description.flags=0;
+	subpass_description.pipelineBindPoint=VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass_description.inputAttachmentCount=0;
+	subpass_description.pInputAttachments=NULL;
+	subpass_description.colorAttachmentCount=1;
+	subpass_description.pColorAttachments=&attach_reference;
+	subpass_description.pResolveAttachments=NULL;
+	subpass_description.pDepthStencilAttachment=NULL;
+	subpass_description.preserveAttachmentCount=0;
+	subpass_description.pPreserveAttachments=NULL;
 
 	printf("subpass description filled.\n");
 
 	//fill subpass dependency
 
-	VkSubpassDependency subp_dep;
-	subp_dep.srcSubpass=VK_SUBPASS_EXTERNAL;
-	subp_dep.dstSubpass=0;
-	subp_dep.srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	subp_dep.dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	subp_dep.srcAccessMask=0;
-	subp_dep.dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	subp_dep.dependencyFlags=0;
+	VkSubpassDependency subpass_dependency;
+	subpass_dependency.srcSubpass=VK_SUBPASS_EXTERNAL;
+	subpass_dependency.dstSubpass=0;
+	subpass_dependency.srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	subpass_dependency.dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	subpass_dependency.srcAccessMask=0;
+	subpass_dependency.dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	subpass_dependency.dependencyFlags=0;
 	printf("subpass dependency created.\n");
 
 
 	//create render pass
 	
-	VkRenderPassCreateInfo rendp_cre_info;
-	rendp_cre_info.sType=VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	rendp_cre_info.pNext=NULL;
-	rendp_cre_info.flags=0;
-	rendp_cre_info.attachmentCount=1;
-	rendp_cre_info.pAttachments=&attach_descp;
-	rendp_cre_info.subpassCount=1;
-	rendp_cre_info.pSubpasses=&subp_descp;
-	rendp_cre_info.dependencyCount=1;
-	rendp_cre_info.pDependencies=&subp_dep;
+	VkRenderPassCreateInfo renderpass_creation_info;
+	renderpass_creation_info.sType=VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	renderpass_creation_info.pNext=NULL;
+	renderpass_creation_info.flags=0;
+	renderpass_creation_info.attachmentCount=1;
+	renderpass_creation_info.pAttachments=&attachment_descption;
+	renderpass_creation_info.subpassCount=1;
+	renderpass_creation_info.pSubpasses=&subpass_description;
+	renderpass_creation_info.dependencyCount=1;
+	renderpass_creation_info.pDependencies=&subpass_dependency;
 
-	VkRenderPass rendp;
-	vkCreateRenderPass(dev,&rendp_cre_info,NULL,&rendp);
+	VkRenderPass renderpass;
+	vkCreateRenderPass(device,&renderpass_creation_info,NULL,&renderpass);
 	printf("render pass created.\n");
 
 	/*
@@ -519,24 +511,24 @@ int main(int argc, char* argv[]) {
 
 
 	//create shader modules
-	VkShaderModuleCreateInfo vert_shad_mod_cre_info;
-	vert_shad_mod_cre_info.sType=VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	vert_shad_mod_cre_info.pNext=NULL;
-	vert_shad_mod_cre_info.flags=0;
-	vert_shad_mod_cre_info.codeSize=shader_loaded? vert_size:0;
-	vert_shad_mod_cre_info.pCode= shader_loaded ? (const uint32_t *)p_vert_code : NULL;
+	VkShaderModuleCreateInfo vertex_shader_module_create_info;
+	vertex_shader_module_create_info.sType=VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	vertex_shader_module_create_info.pNext=NULL;
+	vertex_shader_module_create_info.flags=0;
+	vertex_shader_module_create_info.codeSize=shader_loaded? vert_size:0;
+	vertex_shader_module_create_info.pCode= shader_loaded ? (const uint32_t *)p_vert_code : NULL;
 
-	VkShaderModuleCreateInfo frag_shad_mod_cre_info;
-	frag_shad_mod_cre_info.sType= VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	frag_shad_mod_cre_info.pNext=NULL;
-	frag_shad_mod_cre_info.flags=0;
-	frag_shad_mod_cre_info.codeSize=shader_loaded?frag_size:0;
-	frag_shad_mod_cre_info.pCode= shader_loaded ? (const uint32_t *)p_frag_code : NULL;
+	VkShaderModuleCreateInfo fragment_shader_module_create_info;
+	fragment_shader_module_create_info.sType= VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	fragment_shader_module_create_info.pNext=NULL;
+	fragment_shader_module_create_info.flags=0;
+	fragment_shader_module_create_info.codeSize=shader_loaded?frag_size:0;
+	fragment_shader_module_create_info.pCode= shader_loaded ? (const uint32_t *)p_frag_code : NULL;
 
-	VkShaderModule vert_shad_mod, frag_shad_mod;
-	vkCreateShaderModule (dev,&vert_shad_mod_cre_info,NULL,&vert_shad_mod);
+	VkShaderModule vertex_shader_module, fragment_shader_module;
+	vkCreateShaderModule (device,&vertex_shader_module_create_info,NULL,&vertex_shader_module);
 	printf("vertex shader module created.\n");
-	vkCreateShaderModule(dev,&frag_shad_mod_cre_info,NULL,&frag_shad_mod);
+	vkCreateShaderModule(device,&fragment_shader_module_create_info,NULL,&fragment_shader_module);
 	printf("fragment shader module created.\n");
 
 
@@ -544,45 +536,45 @@ int main(int argc, char* argv[]) {
 
 	//fill shader stage info
 
-	VkPipelineShaderStageCreateInfo vert_shad_stage_cre_info, frag_shad_stage_cre_info, shad_stage_cre_infos[2];
+	VkPipelineShaderStageCreateInfo vertex_shader_stage_creation_info, fragment_shader_stage_creation_info, shader_stage_creation_infos[2];
 
-	vert_shad_stage_cre_info.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	vert_shad_stage_cre_info.pNext=NULL;
-	vert_shad_stage_cre_info.flags=0;
-	vert_shad_stage_cre_info.stage=VK_SHADER_STAGE_VERTEX_BIT;
-	vert_shad_stage_cre_info.module=vert_shad_mod;
-	char vert_entry[VK_MAX_EXTENSION_NAME_SIZE];
-	strcpy(vert_entry,"main");
-	vert_shad_stage_cre_info.pName=vert_entry;
-	vert_shad_stage_cre_info.pSpecializationInfo=NULL;
+	vertex_shader_stage_creation_info.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vertex_shader_stage_creation_info.pNext=NULL;
+	vertex_shader_stage_creation_info.flags=0;
+	vertex_shader_stage_creation_info.stage=VK_SHADER_STAGE_VERTEX_BIT;
+	vertex_shader_stage_creation_info.module=vertex_shader_module;
+	char vertex_entry[VK_MAX_EXTENSION_NAME_SIZE];
+	strcpy(vertex_entry,"main");
+	vertex_shader_stage_creation_info.pName=vertex_entry;
+	vertex_shader_stage_creation_info.pSpecializationInfo=NULL;
 	printf("vertex shader stage info filled.\n");
 
-	frag_shad_stage_cre_info.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	frag_shad_stage_cre_info.pNext=NULL;
-	frag_shad_stage_cre_info.flags=0;
-	frag_shad_stage_cre_info.stage=VK_SHADER_STAGE_FRAGMENT_BIT;
-	frag_shad_stage_cre_info.module=frag_shad_mod;
-	char frag_entry[VK_MAX_EXTENSION_NAME_SIZE];
-	strcpy(frag_entry,"main");
-	frag_shad_stage_cre_info.pName=frag_entry;
-	frag_shad_stage_cre_info.pSpecializationInfo=NULL;
+	fragment_shader_stage_creation_info.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	fragment_shader_stage_creation_info.pNext=NULL;
+	fragment_shader_stage_creation_info.flags=0;
+	fragment_shader_stage_creation_info.stage=VK_SHADER_STAGE_FRAGMENT_BIT;
+	fragment_shader_stage_creation_info.module=fragment_shader_module;
+	char fragment_entry[VK_MAX_EXTENSION_NAME_SIZE];
+	strcpy(fragment_entry,"main");
+	fragment_shader_stage_creation_info.pName=fragment_entry;
+	fragment_shader_stage_creation_info.pSpecializationInfo=NULL;
 	printf("fragment shader stage info filled.\n");
 
-	shad_stage_cre_infos[0]=vert_shad_stage_cre_info;
-	shad_stage_cre_infos[1]=frag_shad_stage_cre_info;
+	shader_stage_creation_infos[0]=vertex_shader_stage_creation_info;
+	shader_stage_creation_infos[1]=fragment_shader_stage_creation_info;
 
 
 	//fill vertex input state info
 	
-	VkPipelineVertexInputStateCreateInfo vert_input_info;
+	VkPipelineVertexInputStateCreateInfo vertex_input_info;
 
-	vert_input_info.sType=VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vert_input_info.pNext=NULL;
-	vert_input_info.flags=0;
-	vert_input_info.vertexBindingDescriptionCount=0;
-	vert_input_info.pVertexBindingDescriptions=NULL;
-	vert_input_info.vertexAttributeDescriptionCount=0;
-	vert_input_info.pVertexAttributeDescriptions=NULL;
+	vertex_input_info.sType=VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vertex_input_info.pNext=NULL;
+	vertex_input_info.flags=0;
+	vertex_input_info.vertexBindingDescriptionCount=0;
+	vertex_input_info.pVertexBindingDescriptions=NULL;
+	vertex_input_info.vertexAttributeDescriptionCount=0;
+	vertex_input_info.pVertexAttributeDescriptions=NULL;
 
 	printf("vertex input state info filled.\n");
 
@@ -602,8 +594,8 @@ int main(int argc, char* argv[]) {
 	VkViewport viewport;
 	viewport.x=0.0f;
 	viewport.y=0.0f;
-	viewport.width=(float)swap_cre_info.imageExtent.width;
-	viewport.height=(float)swap_cre_info.imageExtent.height;
+	viewport.width=(float)swap_create_info.imageExtent.width;
+	viewport.height=(float)swap_create_info.imageExtent.height;
 	viewport.minDepth=0.0f;
 	viewport.maxDepth=1.0f;
 	printf("viewport filled.\n");
@@ -616,52 +608,52 @@ int main(int argc, char* argv[]) {
 	sci_offset.x=0;
 	sci_offset.y=0;
 	scissor.offset=sci_offset;
-	scissor.extent=swap_cre_info.imageExtent;
+	scissor.extent=swap_create_info.imageExtent;
 	printf("scissor filled.\n");
 
 	//fill viewport state info
 	
-	VkPipelineViewportStateCreateInfo vwp_state_cre_info;
-	vwp_state_cre_info.sType=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-	vwp_state_cre_info.pNext=NULL;
-	vwp_state_cre_info.flags=0;
-	vwp_state_cre_info.viewportCount=1;
-	vwp_state_cre_info.pViewports=&viewport;
-	vwp_state_cre_info.scissorCount=1;
-	vwp_state_cre_info.pScissors=&scissor;
+	VkPipelineViewportStateCreateInfo pipeline_viewport_state_creation_info;
+	pipeline_viewport_state_creation_info.sType=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	pipeline_viewport_state_creation_info.pNext=NULL;
+	pipeline_viewport_state_creation_info.flags=0;
+	pipeline_viewport_state_creation_info.viewportCount=1;
+	pipeline_viewport_state_creation_info.pViewports=&viewport;
+	pipeline_viewport_state_creation_info.scissorCount=1;
+	pipeline_viewport_state_creation_info.pScissors=&scissor;
 	printf("viewport state filled.\n");
 
 
 	//fill rasterizer state info
-	VkPipelineRasterizationStateCreateInfo rast_cre_info;
-	rast_cre_info.sType=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-	rast_cre_info.pNext=NULL;
-	rast_cre_info.flags=0;
-	rast_cre_info.depthClampEnable=VK_FALSE;
-	rast_cre_info.rasterizerDiscardEnable=VK_FALSE;
-	rast_cre_info.polygonMode=VK_POLYGON_MODE_FILL;
-	rast_cre_info.cullMode=VK_CULL_MODE_BACK_BIT;
-	rast_cre_info.frontFace=VK_FRONT_FACE_CLOCKWISE;
-	rast_cre_info.depthBiasEnable=VK_FALSE;
-	rast_cre_info.depthBiasConstantFactor=0.0f;
-	rast_cre_info.depthBiasClamp=0.0f;
-	rast_cre_info.depthBiasSlopeFactor=0.0f;
-	rast_cre_info.lineWidth=1.0f;
+	VkPipelineRasterizationStateCreateInfo rasterization_create_info;
+	rasterization_create_info.sType=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterization_create_info.pNext=NULL;
+	rasterization_create_info.flags=0;
+	rasterization_create_info.depthClampEnable=VK_FALSE;
+	rasterization_create_info.rasterizerDiscardEnable=VK_FALSE;
+	rasterization_create_info.polygonMode=VK_POLYGON_MODE_FILL;
+	rasterization_create_info.cullMode=VK_CULL_MODE_BACK_BIT;
+	rasterization_create_info.frontFace=VK_FRONT_FACE_CLOCKWISE;
+	rasterization_create_info.depthBiasEnable=VK_FALSE;
+	rasterization_create_info.depthBiasConstantFactor=0.0f;
+	rasterization_create_info.depthBiasClamp=0.0f;
+	rasterization_create_info.depthBiasSlopeFactor=0.0f;
+	rasterization_create_info.lineWidth=1.0f;
 
 	printf("rasterization info filled.\n");
 
 	//fill multisampling state info
 	
-	VkPipelineMultisampleStateCreateInfo mul_sam_cre_info;
-	mul_sam_cre_info.sType=VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-	mul_sam_cre_info.pNext=NULL;
-	mul_sam_cre_info.flags=0;
-	mul_sam_cre_info.rasterizationSamples=VK_SAMPLE_COUNT_1_BIT;
-	mul_sam_cre_info.sampleShadingEnable=VK_FALSE;
-	mul_sam_cre_info.minSampleShading=1.0f;
-	mul_sam_cre_info.pSampleMask=NULL;
-	mul_sam_cre_info.alphaToCoverageEnable=VK_FALSE;
-	mul_sam_cre_info.alphaToOneEnable=VK_FALSE;
+	VkPipelineMultisampleStateCreateInfo multiple_sample_create_info;
+	multiple_sample_create_info.sType=VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multiple_sample_create_info.pNext=NULL;
+	multiple_sample_create_info.flags=0;
+	multiple_sample_create_info.rasterizationSamples=VK_SAMPLE_COUNT_1_BIT;
+	multiple_sample_create_info.sampleShadingEnable=VK_FALSE;
+	multiple_sample_create_info.minSampleShading=1.0f;
+	multiple_sample_create_info.pSampleMask=NULL;
+	multiple_sample_create_info.alphaToCoverageEnable=VK_FALSE;
+	multiple_sample_create_info.alphaToOneEnable=VK_FALSE;
 
 	printf("multisample info filled.\n");
 
@@ -687,17 +679,17 @@ int main(int argc, char* argv[]) {
 
 	//fill color blend state info
 	
-	VkPipelineColorBlendStateCreateInfo color_blend_cre_info;
-	color_blend_cre_info.sType=VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	color_blend_cre_info.pNext=NULL;
-	color_blend_cre_info.flags=0;
-	color_blend_cre_info.logicOpEnable=VK_FALSE;
-	color_blend_cre_info.logicOp=VK_LOGIC_OP_COPY;
-	color_blend_cre_info.attachmentCount=1;
-	color_blend_cre_info.pAttachments=&color_blend_attach;
+	VkPipelineColorBlendStateCreateInfo color_blend_create_info;
+	color_blend_create_info.sType=VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	color_blend_create_info.pNext=NULL;
+	color_blend_create_info.flags=0;
+	color_blend_create_info.logicOpEnable=VK_FALSE;
+	color_blend_create_info.logicOp=VK_LOGIC_OP_COPY;
+	color_blend_create_info.attachmentCount=1;
+	color_blend_create_info.pAttachments=&color_blend_attach;
 
 	for(uint32_t i=0;i<4;i++){
-		color_blend_cre_info.blendConstants[i]=0.0f;
+		color_blend_create_info.blendConstants[i]=0.0f;
 	}
 
 	printf("color blend state info filled.\n");
@@ -705,54 +697,54 @@ int main(int argc, char* argv[]) {
 
 	//create pipeline layout
 	
-	VkPipelineLayoutCreateInfo pipe_lay_cre_info;
-	pipe_lay_cre_info.sType=VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipe_lay_cre_info.pNext=NULL;
-	pipe_lay_cre_info.flags=0;
-	pipe_lay_cre_info.setLayoutCount=0;
-	pipe_lay_cre_info.pSetLayouts=NULL;
-	pipe_lay_cre_info.pushConstantRangeCount=0;
-	pipe_lay_cre_info.pPushConstantRanges=NULL;
+	VkPipelineLayoutCreateInfo pipe_layout_create_info;
+	pipe_layout_create_info.sType=VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipe_layout_create_info.pNext=NULL;
+	pipe_layout_create_info.flags=0;
+	pipe_layout_create_info.setLayoutCount=0;
+	pipe_layout_create_info.pSetLayouts=NULL;
+	pipe_layout_create_info.pushConstantRangeCount=0;
+	pipe_layout_create_info.pPushConstantRanges=NULL;
 
 	VkPipelineLayout pipe_layout;
-	vkCreatePipelineLayout(dev,&pipe_lay_cre_info,NULL,&pipe_layout);
+	vkCreatePipelineLayout(device,&pipe_layout_create_info,NULL,&pipe_layout);
 
 	printf("pipeline layout created.\n");
 
 
 	//create pipeline
 	
-	VkGraphicsPipelineCreateInfo pipe_cre_info;
-	pipe_cre_info.sType=VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipe_cre_info.pNext=NULL;
-	pipe_cre_info.flags=0;
-	pipe_cre_info.stageCount=2;
-	pipe_cre_info.pStages=shad_stage_cre_infos;
-	pipe_cre_info.pVertexInputState=&vert_input_info;
-	pipe_cre_info.pInputAssemblyState=&input_asm_info;
-	pipe_cre_info.pTessellationState=NULL;
-	pipe_cre_info.pViewportState=&vwp_state_cre_info;
-	pipe_cre_info.pRasterizationState=&rast_cre_info;
-	pipe_cre_info.pMultisampleState=&mul_sam_cre_info;
-	pipe_cre_info.pDepthStencilState=NULL;
-	pipe_cre_info.pColorBlendState=&color_blend_cre_info;
-	pipe_cre_info.pDynamicState=NULL;
+	VkGraphicsPipelineCreateInfo pipe_create_info;
+	pipe_create_info.sType=VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipe_create_info.pNext=NULL;
+	pipe_create_info.flags=0;
+	pipe_create_info.stageCount=2;
+	pipe_create_info.pStages=shader_stage_creation_infos;
+	pipe_create_info.pVertexInputState=&vertex_input_info;
+	pipe_create_info.pInputAssemblyState=&input_asm_info;
+	pipe_create_info.pTessellationState=NULL;
+	pipe_create_info.pViewportState=&pipeline_viewport_state_creation_info;
+	pipe_create_info.pRasterizationState=&rasterization_create_info;
+	pipe_create_info.pMultisampleState=&multiple_sample_create_info;
+	pipe_create_info.pDepthStencilState=NULL;
+	pipe_create_info.pColorBlendState=&color_blend_create_info;
+	pipe_create_info.pDynamicState=NULL;
 
-	pipe_cre_info.layout=pipe_layout;
-	pipe_cre_info.renderPass=rendp;
-	pipe_cre_info.subpass=0;
-	pipe_cre_info.basePipelineHandle=VK_NULL_HANDLE;
-	pipe_cre_info.basePipelineIndex=-1;
+	pipe_create_info.layout=pipe_layout;
+	pipe_create_info.renderPass=renderpass;
+	pipe_create_info.subpass=0;
+	pipe_create_info.basePipelineHandle=VK_NULL_HANDLE;
+	pipe_create_info.basePipelineIndex=-1;
 
 	VkPipeline pipe;
-	vkCreateGraphicsPipelines(dev,VK_NULL_HANDLE,1,&pipe_cre_info,NULL,&pipe);
+	vkCreateGraphicsPipelines(device,VK_NULL_HANDLE,1,&pipe_create_info,NULL,&pipe);
 	printf("graphics pipeline created.\n");
 
 	//destroy shader module
 	
-	vkDestroyShaderModule(dev,frag_shad_mod,NULL);
+	vkDestroyShaderModule(device,fragment_shader_module,NULL);
 	printf("fragment shader module destroyed.\n");
-	vkDestroyShaderModule(dev,vert_shad_mod,NULL);
+	vkDestroyShaderModule(device,vertex_shader_module,NULL);
 	printf("vertex shader module destroyed.\n");
 	free(p_frag_code);
 	printf("fragment shader binaries released.\n");
@@ -764,22 +756,22 @@ int main(int argc, char* argv[]) {
 	*/
 
 	//create framebuffer
-	VkFramebufferCreateInfo frame_buff_cre_infos[swap_image_count];
-	VkFramebuffer frame_buffs[swap_image_count];
+	VkFramebufferCreateInfo frame_buffer_creation_infos[swap_image_count];
+	VkFramebuffer frame_buffers[swap_image_count];
 	VkImageView image_attachs[swap_image_count];
 	for(uint32_t i=0;i<swap_image_count;i++){
 		image_attachs[i]=image_views[i];
-		frame_buff_cre_infos[i].sType=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-		frame_buff_cre_infos[i].pNext=NULL;
-		frame_buff_cre_infos[i].flags=0;
-		frame_buff_cre_infos[i].renderPass=rendp;
-		frame_buff_cre_infos[i].attachmentCount=1;
-		frame_buff_cre_infos[i].pAttachments=&(image_attachs[i]);
-		frame_buff_cre_infos[i].width=swap_cre_info.imageExtent.width;
-		frame_buff_cre_infos[i].height=swap_cre_info.imageExtent.height;
-		frame_buff_cre_infos[i].layers=1;
+		frame_buffer_creation_infos[i].sType=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		frame_buffer_creation_infos[i].pNext=NULL;
+		frame_buffer_creation_infos[i].flags=0;
+		frame_buffer_creation_infos[i].renderPass=renderpass;
+		frame_buffer_creation_infos[i].attachmentCount=1;
+		frame_buffer_creation_infos[i].pAttachments=&(image_attachs[i]);
+		frame_buffer_creation_infos[i].width=swap_create_info.imageExtent.width;
+		frame_buffer_creation_infos[i].height=swap_create_info.imageExtent.height;
+		frame_buffer_creation_infos[i].layers=1;
 
-		vkCreateFramebuffer(dev,&(frame_buff_cre_infos[i]),NULL,&(frame_buffs[i]));
+		vkCreateFramebuffer(device,&(frame_buffer_creation_infos[i]),NULL,&(frame_buffers[i]));
 		printf("framebuffer %d created.\n",i);
 	}
 
@@ -790,60 +782,60 @@ int main(int argc, char* argv[]) {
 
 	//create command pool
 	
-	VkCommandPoolCreateInfo cmd_pool_cre_info;
-	cmd_pool_cre_info.sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	cmd_pool_cre_info.pNext=NULL;
-	cmd_pool_cre_info.flags=0;
-	cmd_pool_cre_info.queueFamilyIndex=qf_best_index;
+	VkCommandPoolCreateInfo cmd_pool_create_info;
+	cmd_pool_create_info.sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	cmd_pool_create_info.pNext=NULL;
+	cmd_pool_create_info.flags=0;
+	cmd_pool_create_info.queueFamilyIndex=queue_family_best_index;
 
 	VkCommandPool cmd_pool;
-	vkCreateCommandPool(dev,&cmd_pool_cre_info,NULL,&cmd_pool);
+	vkCreateCommandPool(device,&cmd_pool_create_info,NULL,&cmd_pool);
 	printf("command pool created.\n");
 	
 	//allocate command buffers
 	
-	VkCommandBufferAllocateInfo cmd_buff_alloc_info;
-	cmd_buff_alloc_info.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	cmd_buff_alloc_info.pNext=NULL;
-	cmd_buff_alloc_info.commandPool=cmd_pool;
-	cmd_buff_alloc_info.level=VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	cmd_buff_alloc_info.commandBufferCount=swap_image_count;
+	VkCommandBufferAllocateInfo cmd_buffer_alloc_info;
+	cmd_buffer_alloc_info.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	cmd_buffer_alloc_info.pNext=NULL;
+	cmd_buffer_alloc_info.commandPool=cmd_pool;
+	cmd_buffer_alloc_info.level=VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	cmd_buffer_alloc_info.commandBufferCount=swap_image_count;
 
 	VkCommandBuffer cmd_buffers[swap_image_count];
-	vkAllocateCommandBuffers(dev,&cmd_buff_alloc_info,cmd_buffers);
+	vkAllocateCommandBuffers(device,&cmd_buffer_alloc_info,cmd_buffers);
 	printf("command buffers allocated.\n");
 
 	/*
 	render preparation
 	*/
-	VkCommandBufferBeginInfo cmd_buff_begin_infos[swap_image_count];
-	VkRenderPassBeginInfo rendp_begin_infos[swap_image_count];
-	VkRect2D rendp_area;
-	rendp_area.offset.x=0;
-	rendp_area.offset.y=0;
-	rendp_area.extent=swap_cre_info.imageExtent;
+	VkCommandBufferBeginInfo cmd_buffer_begin_infos[swap_image_count];
+	VkRenderPassBeginInfo renderpass_begin_infos[swap_image_count];
+	VkRect2D renderpass_area;
+	renderpass_area.offset.x=0;
+	renderpass_area.offset.y=0;
+	renderpass_area.extent=swap_create_info.imageExtent;
 	VkClearValue clear_val={0.6f,0.2f,0.8f,0.0f};
 	for(uint32_t i=0;i<swap_image_count;i++){
 
-		cmd_buff_begin_infos[i].sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		cmd_buff_begin_infos[i].pNext=NULL;
-		cmd_buff_begin_infos[i].flags=0;
-		cmd_buff_begin_infos[i].pInheritanceInfo=NULL;
+		cmd_buffer_begin_infos[i].sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		cmd_buffer_begin_infos[i].pNext=NULL;
+		cmd_buffer_begin_infos[i].flags=0;
+		cmd_buffer_begin_infos[i].pInheritanceInfo=NULL;
 		printf("command buffer begin info %d filled.\n",i);
 
-		rendp_begin_infos[i].sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		rendp_begin_infos[i].pNext=NULL;
-		rendp_begin_infos[i].renderPass=rendp;
-		rendp_begin_infos[i].framebuffer=frame_buffs[i];
-		rendp_begin_infos[i].renderArea=rendp_area;
-		rendp_begin_infos[i].clearValueCount=1;
-		rendp_begin_infos[i].pClearValues=&clear_val;
+		renderpass_begin_infos[i].sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderpass_begin_infos[i].pNext=NULL;
+		renderpass_begin_infos[i].renderPass=renderpass;
+		renderpass_begin_infos[i].framebuffer=frame_buffers[i];
+		renderpass_begin_infos[i].renderArea=renderpass_area;
+		renderpass_begin_infos[i].clearValueCount=1;
+		renderpass_begin_infos[i].pClearValues=&clear_val;
 
 		printf("render pass begin info %d filled.\n",i);
 
-		vkBeginCommandBuffer(cmd_buffers[i],&cmd_buff_begin_infos[i]);
+		vkBeginCommandBuffer(cmd_buffers[i],&cmd_buffer_begin_infos[i]);
 
-		vkCmdBeginRenderPass(cmd_buffers[i],&(rendp_begin_infos[i]),VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBeginRenderPass(cmd_buffers[i],&(renderpass_begin_infos[i]),VK_SUBPASS_CONTENTS_INLINE);
 
 		vkCmdBindPipeline(cmd_buffers[i],VK_PIPELINE_BIND_POINT_GRAPHICS,pipe);
 
@@ -859,33 +851,33 @@ int main(int argc, char* argv[]) {
 	//semaphores and fences creation part
 
 	uint32_t max_frames=2;
-	VkSemaphore semps_img_avl[max_frames];
-	VkSemaphore semps_rend_fin[swap_image_count];
-	VkFence fens[max_frames];
+	VkSemaphore semaphore_img_avl[max_frames];
+	VkSemaphore semaphore_rend_fin[swap_image_count];
+	VkFence fences[max_frames];
 
-	VkSemaphoreCreateInfo semp_cre_info;
-	semp_cre_info.sType=VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-	semp_cre_info.pNext=NULL;
-	semp_cre_info.flags=0;
+	VkSemaphoreCreateInfo semaphore_create_info;
+	semaphore_create_info.sType=VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	semaphore_create_info.pNext=NULL;
+	semaphore_create_info.flags=0;
 
-	VkFenceCreateInfo fen_cre_info;
-	fen_cre_info.sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	fen_cre_info.pNext=NULL;
-	fen_cre_info.flags=VK_FENCE_CREATE_SIGNALED_BIT;
+	VkFenceCreateInfo fence_create_info;
+	fence_create_info.sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fence_create_info.pNext=NULL;
+	fence_create_info.flags=VK_FENCE_CREATE_SIGNALED_BIT;
 
 	for(uint32_t i=0;i<max_frames;i++){
-		vkCreateSemaphore(dev,&semp_cre_info,NULL,&(semps_img_avl[i]));
-		vkCreateFence(dev,&fen_cre_info,NULL,&(fens[i]));
+		vkCreateSemaphore(device,&semaphore_create_info,NULL,&(semaphore_img_avl[i]));
+		vkCreateFence(device,&fence_create_info,NULL,&(fences[i]));
 	}
 	for(uint32_t i=0;i<swap_image_count;i++){
-		vkCreateSemaphore(dev,&semp_cre_info,NULL,&(semps_rend_fin[i]));
+		vkCreateSemaphore(device,&semaphore_create_info,NULL,&(semaphore_rend_fin[i]));
 	}
 	printf("semaphores and fences created.\n");
 
-	uint32_t cur_frame=0;
-	VkFence fens_img[swap_image_count];
+	uint32_t current_frame=0;
+	VkFence fence_img[swap_image_count];
 	for(uint32_t i=0;i<swap_image_count;i++){
-		fens_img[i]=VK_NULL_HANDLE;
+		fence_img[i]=VK_NULL_HANDLE;
 	}
 
 
@@ -897,64 +889,64 @@ int main(int argc, char* argv[]) {
 	
 		//submit
 	
-		vkWaitForFences(dev,1,&(fens[cur_frame]),VK_TRUE,UINT64_MAX);
+		vkWaitForFences(device,1,&(fences[current_frame]),VK_TRUE,UINT64_MAX);
 
 		uint32_t img_index=0;
-		vkAcquireNextImageKHR(dev,swap,UINT64_MAX,semps_img_avl[cur_frame],VK_NULL_HANDLE,&img_index);
+		vkAcquireNextImageKHR(device,swap,UINT64_MAX,semaphore_img_avl[current_frame],VK_NULL_HANDLE,&img_index);
 
-		if(fens_img[img_index]!=VK_NULL_HANDLE){
-			vkWaitForFences(dev,1,&(fens_img[img_index]),VK_TRUE,UINT64_MAX);
+		if(fence_img[img_index]!=VK_NULL_HANDLE){
+			vkWaitForFences(device,1,&(fence_img[img_index]),VK_TRUE,UINT64_MAX);
 		}
 
-		fens_img[img_index]=fens[cur_frame];
+		fence_img[img_index]=fences[current_frame];
 
-		VkSubmitInfo sub_info;
-		sub_info.sType=VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		sub_info.pNext=NULL;
+		VkSubmitInfo submit_info;
+		submit_info.sType=VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submit_info.pNext=NULL;
 
-		VkSemaphore semps_wait[1];
-		semps_wait[0]=semps_img_avl[cur_frame];
+		VkSemaphore semaphore_wait[1];
+		semaphore_wait[0]=semaphore_img_avl[current_frame];
 		VkPipelineStageFlags wait_stages[1];
 		wait_stages[0] = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-		sub_info.waitSemaphoreCount=1;
-		sub_info.pWaitSemaphores=&(semps_wait[0]);
-		sub_info.pWaitDstStageMask=&(wait_stages[0]);
-		sub_info.commandBufferCount=1;
-		sub_info.pCommandBuffers=&(cmd_buffers[img_index]);
+		submit_info.waitSemaphoreCount=1;
+		submit_info.pWaitSemaphores=&(semaphore_wait[0]);
+		submit_info.pWaitDstStageMask=&(wait_stages[0]);
+		submit_info.commandBufferCount=1;
+		submit_info.pCommandBuffers=&(cmd_buffers[img_index]);
 
-		VkSemaphore semps_sig[1];
-		semps_sig[0]=semps_rend_fin[img_index];
+		VkSemaphore semaphore_sig[1];
+		semaphore_sig[0]=semaphore_rend_fin[img_index];
 
-		sub_info.signalSemaphoreCount=1;
-		sub_info.pSignalSemaphores=&(semps_sig[0]);
+		submit_info.signalSemaphoreCount=1;
+		submit_info.pSignalSemaphores=&(semaphore_sig[0]);
 
-		vkResetFences(dev,1,&(fens[cur_frame]));
+		vkResetFences(device,1,&(fences[current_frame]));
 
-		vkQueueSubmit(q_graph,1,&sub_info,fens[cur_frame]);
+		vkQueueSubmit(queue_graph,1,&submit_info,fences[current_frame]);
 
 		//present
 		//
-		VkPresentInfoKHR pres_info;
+		VkPresentInfoKHR present_info;
 
-		pres_info.sType=VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-		pres_info.pNext=NULL;
-		pres_info.waitSemaphoreCount=1;
-		pres_info.pWaitSemaphores=&(semps_sig[0]);
+		present_info.sType=VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+		present_info.pNext=NULL;
+		present_info.waitSemaphoreCount=1;
+		present_info.pWaitSemaphores=&(semaphore_sig[0]);
 
 		VkSwapchainKHR swaps[1];
 		swaps[0]=swap;
-		pres_info.swapchainCount=1;
-		pres_info.pSwapchains=&(swaps[0]);
-		pres_info.pImageIndices=&img_index;
-		pres_info.pResults=NULL;
+		present_info.swapchainCount=1;
+		present_info.pSwapchains=&(swaps[0]);
+		present_info.pImageIndices=&img_index;
+		present_info.pResults=NULL;
 
-		vkQueuePresentKHR(q_pres,&pres_info);
+		vkQueuePresentKHR(queue_present,&present_info);
 
-		cur_frame=(cur_frame+1)%max_frames;
+		current_frame=(current_frame+1)%max_frames;
 	}
 
-	vkDeviceWaitIdle(dev);
+	vkDeviceWaitIdle(device);
 	printf("command buffers finished.\n");
 
 	/*
@@ -963,18 +955,18 @@ int main(int argc, char* argv[]) {
 
 	//free command buffer
 
-	vkFreeCommandBuffers(dev,cmd_pool,swap_image_count,cmd_buffers);
+	vkFreeCommandBuffers(device,cmd_pool,swap_image_count,cmd_buffers);
 	printf("command buffers freed.\n");
 
 
 	//destroy semaphores and fences
 
 	for(uint32_t i=0;i<max_frames;i++){
-		vkDestroySemaphore(dev,semps_img_avl[i],NULL);
-		vkDestroyFence(dev,fens[i],NULL);
+		vkDestroySemaphore(device,semaphore_img_avl[i],NULL);
+		vkDestroyFence(device,fences[i],NULL);
 	}
 	for(uint32_t i=0;i<swap_image_count;i++){
-		vkDestroySemaphore(dev,semps_rend_fin[i],NULL);
+		vkDestroySemaphore(device,semaphore_rend_fin[i],NULL);
 	}
 
 	printf("semaphores and fences destroyed.\n");
@@ -982,58 +974,58 @@ int main(int argc, char* argv[]) {
 
 	//destroy command pool
 
-	vkDestroyCommandPool(dev,cmd_pool,NULL);
+	vkDestroyCommandPool(device,cmd_pool,NULL);
 	printf("command pool destroyed.\n");
 
 
 	//destroy frambuffer
 	for(uint32_t i=0;i<swap_image_count;i++){
-		vkDestroyFramebuffer(dev,frame_buffs[i],NULL);
+		vkDestroyFramebuffer(device,frame_buffers[i],NULL);
 		printf("frambuffer %d destroyed.\n",i);
 	}
 
 	//destroy pipeline
 
-	vkDestroyPipeline(dev,pipe,NULL);
+	vkDestroyPipeline(device,pipe,NULL);
 	printf("graphics pipeline destroyed.\n");
 
 	//destroy pipeline layout
 
-	vkDestroyPipelineLayout(dev,pipe_layout,NULL);
+	vkDestroyPipelineLayout(device,pipe_layout,NULL);
 	printf("pipeline layout destroyed.\n");
 
 	//destroy render pass
 
-	vkDestroyRenderPass(dev,rendp,NULL);
+	vkDestroyRenderPass(device,renderpass,NULL);
 	printf("render pass destroyed.\n");
 
 	//destroy imageview
 
 	for(uint32_t i=0;i<swap_image_count;i++){
-		vkDestroyImageView(dev,image_views[i],NULL);
+		vkDestroyImageView(device,image_views[i],NULL);
 		printf("image view %d destroyed.\n",i);
 	}
 
 	//destroy swapchain
 
-	vkDestroySwapchainKHR(dev,swap,NULL);
+	vkDestroySwapchainKHR(device,swap,NULL);
 	printf("swapchain destroyed.\n");
 
 	//destroy surface and window
 
-	vkDestroySurfaceKHR(inst,surf,NULL);
+	vkDestroySurfaceKHR(instance,surface,NULL);
 	printf("surface destroyed.\n");
 	glfwDestroyWindow(window);
 	printf("window destroyed.\n");
 
 	//destroy device
 
-	vkDestroyDevice(dev,NULL);
+	vkDestroyDevice(device,NULL);
 	printf("logical device destroyed.\n");
 
 	//destroy instance
 
-	vkDestroyInstance(inst,NULL);
+	vkDestroyInstance(instance,NULL);
 	printf("instance destroyed.\n");
 
 	glfwTerminate();
