@@ -15,6 +15,8 @@ My current goals for this project are
 
 [Vulkan Tutorial](https://howtovulkan.com/)
 
+[Learn Modern Vulkan in 2 Hours (Dynamic Rendering, No Render Passes!)](https://www.youtube.com/watch?v=DC9FBRQKNck&t=1190s)
+
 [Vulkan Tutorial C implementation](https://github.com/lonelydevil/vulkan-tutorial-C-implementation)
 
 [A Fast Voxel Traversal Algorithm for Ray Tracing](http://www.cse.yorku.ca/~amana/research/grid.pdf)

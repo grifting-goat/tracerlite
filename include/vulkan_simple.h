@@ -95,8 +95,11 @@ uint32_t findGraphicsQueue(Display_t* display);
 VkDevice createDevice(Display_t* display);
 VkQueue createGraphicsQueue(Display_t* display);
 
-bool initializeDeviceMemory();
-bool createSwapchain(uint32_t width, uint32_t height);
+uint32_t findMemoryTypeIndex(Display_t* display, uint32_t typeBits, VkMemoryPropertyFlags required);
+void createDepthImage(Display_t* display);
+
+VkSwapchainKHR createSwapchain(Display_t* display);
+void proliferateSwapchain(Display_t* display);
 void destroySwapchain();
 
 

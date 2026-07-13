@@ -1,12 +1,14 @@
 #include "vulkan_simple.h"
 
 
+//private
+void set_properties(Display_t* display, const char* name, uint32_t width, uint32_t height);
 
 
 bool display_init(Display_t* display) {
     glfwInit();
     
-    strcpy(display->name,"Tracerlite"); //temp
+    set_properties(display, "Tracerlite", 1280U, 720U);
 
     //order matters
 
@@ -21,7 +23,11 @@ bool display_init(Display_t* display) {
     display->device = createDevice(display);
     display->gfxQueue = createGraphicsQueue(display);
 
+    createDepthImage(display);
+    createSwapchain(display);
+
     
+
     return true;
 }
 
@@ -94,7 +100,7 @@ VkSurfaceKHR createSurface(Display_t* display) {
 GLFWwindow* createWindow(Display_t* display) {
     glfwWindowHint(GLFW_CLIENT_API,GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE,GLFW_FALSE);
-	GLFWwindow *window = glfwCreateWindow(1280,720,"Tracerlite",NULL,NULL);
+	GLFWwindow *window = glfwCreateWindow(display->width,display->height,display->name,NULL,NULL);
 	printf("window created.\n");
 
 	GLFWimage icons[3];
@@ -183,7 +189,7 @@ VkPhysicalDevice findPhysicalDevice(Display_t* display) {
 
 	printf("memory total:%llu\n",physical_device_memory_total[physical_device_best_index]);
 	double mem_gb = (double)physical_device_memory_vram[physical_device_best_index] / (1073741824.0);
-	printf("memory total:%.3f GB\n", mem_gb);
+	printf("VRAM total:%.3f GB\n", mem_gb);
 
 	return physical_device[physical_device_best_index];
 
@@ -306,4 +312,199 @@ VkQueue createGraphicsQueue(Display_t* display) {
     printf("Graphics Queue grabbed\n");
 	return q;
 
+}
+
+uint32_t findMemoryTypeIndex(Display_t* display, uint32_t typeBits, VkMemoryPropertyFlags required) {
+	VkPhysicalDeviceMemoryProperties mem_props;
+	vkGetPhysicalDeviceMemoryProperties(display->physicalDevice, &mem_props);
+
+	for (uint32_t i = 0; i < mem_props.memoryTypeCount; i++) {
+		bool type_supported = typeBits & (1 << i);
+		bool has_properties = (mem_props.memoryTypes[i].propertyFlags & required) == required;
+		if (type_supported && has_properties) {
+			return i;
+		}
+	}
+
+	printf("failed to find suitable memory type.\n");
+	return UINT32_MAX;
+}
+
+//need to understand this one better
+void createDepthImage(Display_t* display) {
+	VkImageCreateInfo image_create_info = {0};
+	image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	image_create_info.imageType = VK_IMAGE_TYPE_2D;
+	image_create_info.format = DEPTH_FORMAT;
+	image_create_info.extent.width = display->width;
+	image_create_info.extent.height = display->height;
+	image_create_info.extent.depth = 1;
+	image_create_info.mipLevels = 1;
+	image_create_info.arrayLayers = 1;
+	image_create_info.samples = VK_SAMPLE_COUNT_1_BIT;
+	image_create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+	image_create_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	image_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+	if (vkCreateImage(display->device, &image_create_info, NULL, &display->depthImage) != VK_SUCCESS) {
+		printf("failed to create depth image.\n");
+		return;
+	}
+
+	VkMemoryRequirements mem_reqs;
+	vkGetImageMemoryRequirements(display->device, display->depthImage, &mem_reqs);
+
+	VkMemoryAllocateInfo alloc_info = {0};
+	alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	alloc_info.allocationSize = mem_reqs.size;
+	alloc_info.memoryTypeIndex = findMemoryTypeIndex(display, mem_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+	if (vkAllocateMemory(display->device, &alloc_info, NULL, &display->depthImageMemory) != VK_SUCCESS) {
+		printf("failed to allocate depth image memory.\n");
+		return;
+	}
+	vkBindImageMemory(display->device, display->depthImage, display->depthImageMemory, 0);
+
+	VkImageViewCreateInfo view_create_info = {0};
+	view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	view_create_info.image = display->depthImage;
+	view_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	view_create_info.format = DEPTH_FORMAT;
+	view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	view_create_info.subresourceRange.baseMipLevel = 0;
+	view_create_info.subresourceRange.levelCount = 1;
+	view_create_info.subresourceRange.baseArrayLayer = 0;
+	view_create_info.subresourceRange.layerCount = 1;
+
+	if (vkCreateImageView(display->device, &view_create_info, NULL, &display->depthImageView) != VK_SUCCESS) {
+		printf("failed to create depth image view.\n");
+		return;
+	}
+
+	printf("depth image created.\n");
+}
+
+
+VkSwapchainKHR createSwapchain(Display_t* display) {
+
+    VkSurfaceCapabilitiesKHR surface_capabilities;
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(display->physicalDevice,display->surface,&surface_capabilities);
+    printf("fetched capabilities from surface.\n");
+
+    uint32_t requestedImageCount = surface_capabilities.minImageCount < 2U ? 2U : surface_capabilities.minImageCount;
+    if (surface_capabilities.maxImageCount > 0) {
+        requestedImageCount = requestedImageCount > surface_capabilities.maxImageCount ? surface_capabilities.maxImageCount :  requestedImageCount;
+    }
+
+    //fetch surface formats
+	uint32_t surface_form_count;
+	vkGetPhysicalDeviceSurfaceFormatsKHR(display->physicalDevice,display->surface,&surface_form_count,NULL);
+	VkSurfaceFormatKHR surface_formats[surface_form_count];
+	vkGetPhysicalDeviceSurfaceFormatsKHR(display->physicalDevice,display->surface,&surface_form_count,surface_formats);
+	printf("fetched %d surface formats.\n",surface_form_count);
+	for(uint32_t i=0;i<surface_form_count;i++){
+		printf("format:%d\tcolorspace:%d\n",surface_formats[i].format,surface_formats[i].colorSpace);
+	}
+
+    //fetch surface present mode
+	uint32_t present_mode_count;
+	vkGetPhysicalDeviceSurfacePresentModesKHR(display->physicalDevice,display->surface,&present_mode_count,NULL);
+	VkPresentModeKHR present_modes[present_mode_count];
+	vkGetPhysicalDeviceSurfacePresentModesKHR(display->physicalDevice,display->surface,&present_mode_count,present_modes);
+	printf("fetched %d present modes.\n",present_mode_count);
+	char mailbox_mode_supported=0;
+	for(uint32_t i=0;i<present_mode_count;i++){
+		printf("present mode:%d\n",present_modes[i]);
+		if(present_modes[i]==VK_PRESENT_MODE_MAILBOX_KHR){
+			printf("mailbox present mode supported.\n");
+			mailbox_mode_supported=1;
+		}
+	}
+
+    //add checks here later
+    VkExtent2D actual_extent;
+	actual_extent.width=display->width;
+	actual_extent.height=display->height;
+
+    //create swapchain
+
+	VkSwapchainCreateInfoKHR swap_create_info;
+    
+	swap_create_info.sType=VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	swap_create_info.pNext=NULL;
+	swap_create_info.flags=0;
+	swap_create_info.surface=display->surface;
+	swap_create_info.minImageCount=surface_capabilities.minImageCount+1;
+	swap_create_info.imageFormat=surface_formats[0].format;
+	swap_create_info.imageColorSpace=surface_formats[0].colorSpace;
+	swap_create_info.imageExtent = actual_extent;
+	swap_create_info.imageArrayLayers=1;
+	swap_create_info.imageUsage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+	swap_create_info.imageSharingMode=VK_SHARING_MODE_EXCLUSIVE;
+	swap_create_info.queueFamilyIndexCount=0;
+	swap_create_info.pQueueFamilyIndices=NULL;
+	swap_create_info.preTransform=surface_capabilities.currentTransform;
+	swap_create_info.compositeAlpha=VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	swap_create_info.presentMode = mailbox_mode_supported ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_FIFO_KHR;
+	swap_create_info.clipped=VK_TRUE;
+	swap_create_info.oldSwapchain=VK_NULL_HANDLE;
+
+    if (vkCreateSwapchainKHR(display->device, &swap_create_info, NULL, &display->swapchain) != VK_SUCCESS){
+		printf("Error creating swapchain\n");
+		return NULL;
+	}
+    printf("swapchain created\n");
+
+    // ask for the swapchain images
+	uint32_t swap_image_count = 0;
+	vkGetSwapchainImagesKHR(display->device, display->swapchain, &swap_image_count, NULL);
+	display->swapchainImages = calloc(swap_image_count, sizeof(VkImage));
+	vkGetSwapchainImagesKHR(display->device, display->swapchain, &swap_image_count, display->swapchainImages);
+	display->swapchainImageViews = calloc(swap_image_count, sizeof(VkImageView));
+
+    //create image view
+	VkImageView image_views[swap_image_count];
+	VkImageViewCreateInfo image_view_creation_infos[swap_image_count];
+
+    VkComponentMapping image_view_rgba_component;
+	image_view_rgba_component.r=VK_COMPONENT_SWIZZLE_IDENTITY;
+	image_view_rgba_component.g=VK_COMPONENT_SWIZZLE_IDENTITY;
+	image_view_rgba_component.b=VK_COMPONENT_SWIZZLE_IDENTITY;
+	image_view_rgba_component.a=VK_COMPONENT_SWIZZLE_IDENTITY;
+
+	VkImageSubresourceRange image_view_subresource;
+	image_view_subresource.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
+	image_view_subresource.baseMipLevel=0;
+	image_view_subresource.levelCount=1;
+	image_view_subresource.baseArrayLayer=0;
+    image_view_subresource.layerCount = swap_create_info.imageArrayLayers;
+
+    for(uint32_t i=0;i<swap_image_count;i++) {
+        image_view_creation_infos[i].sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		image_view_creation_infos[i].pNext=NULL;
+		image_view_creation_infos[i].flags=0;
+		image_view_creation_infos[i].image=display->swapchainImages[i];
+		image_view_creation_infos[i].viewType=VK_IMAGE_VIEW_TYPE_2D;
+		image_view_creation_infos[i].format=surface_formats[0].format;
+		image_view_creation_infos[i].components=image_view_rgba_component;
+		image_view_creation_infos[i].subresourceRange=image_view_subresource;
+
+		vkCreateImageView(display->device,&image_view_creation_infos[i],NULL,&image_views[i]);
+
+		printf("image view %d created.\n",i);
+    }
+}
+
+
+
+
+void set_properties(Display_t* display, const char* name, uint32_t width, uint32_t height) {
+    strcpy(display->name, name);
+    display->width = width;
+	display->height = height;
+
+    display->swapchainWidth = width;
+    display->swapchainHeight= height;
 }
