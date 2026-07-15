@@ -54,6 +54,7 @@ typedef struct {
 	//queue
 	uint32_t gfxQueueFamIdx;
 	VkQueue gfxQueue;
+	VkCommandPool commandPool;
 
 	// swapchain related
 	VkSwapchainKHR swapchain;
@@ -63,6 +64,7 @@ typedef struct {
 	bool requireSwapchainRecreate;
 	uint32_t swapchainWidth;
 	uint32_t swapchainHeight;
+	uint32_t swapchainImageCount;
 
 	VkImage depthImage;
 	VkImageView depthImageView;
@@ -96,20 +98,21 @@ VkDevice createDevice(Display_t* display);
 VkQueue createGraphicsQueue(Display_t* display);
 
 uint32_t findMemoryTypeIndex(Display_t* display, uint32_t typeBits, VkMemoryPropertyFlags required);
-void createDepthImage(Display_t* display);
 
-VkSwapchainKHR createSwapchain(Display_t* display);
-void proliferateSwapchain(Display_t* display);
+void createDepthImage(Display_t* display);
+void createSwapchain(Display_t* display);
+
 void destroySwapchain();
 
+void createShaders(Display_t* display);
 
-VkShaderModule createShaderModule(const char* file);
-bool createShaders();
-Pipeline_t createGraphicsPipeline();
-bool createSyncResources();
-bool createCommandBuffers();
 
-void render();
+Pipeline_t createGraphicsPipeline(Display_t* display);
+
+void createSyncResources(Display_t* display);
+void createCommandBuffers(Display_t* display);
+
+void render(Display_t* display);
 
 
 
