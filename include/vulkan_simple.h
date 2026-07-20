@@ -19,6 +19,7 @@
 #define MAX_FRAMES_IN_FLIGHT  2
 #define SWAPCHAIN_FORMAT      VK_FORMAT_B8G8R8A8_SRGB
 #define DEPTH_FORMAT          VK_FORMAT_D32_SFLOAT
+#define OUTPUT_IMAGE_FORMAT   VK_FORMAT_R8G8B8A8_UNORM
 
 
 // inspired by https://github.com/nickenchev/modern-vulkan
@@ -28,6 +29,17 @@ typedef struct {
 	VkPipelineLayout layout;
 	VkPipeline handle;
 } Pipeline_t;
+
+// must match the `shader_data` cbuffer layout in shaders/shader.hlsl exactly (HLSL cbuffer packing rules)
+typedef struct {
+	float camera_position[4];
+	float camera_rotation[4];
+	int32_t screen_size[2];
+	int32_t pixel_count;
+	float fov;
+	int32_t voxel_grid_size[3];
+	int32_t _pad0;
+} ShaderDataUBO;
 
 typedef struct {
 	uint32_t lastFrameId;
@@ -70,7 +82,14 @@ typedef struct {
 	VkImageView depthImageView;
 
 	VkDeviceMemory depthImageMemory;
-	Pipeline_t pipeline;
+
+	VkImage outputImage;
+	VkImageView outputImageView;
+	VkDeviceMemory outputImageMemory;
+	Pipeline_t gfxPipeline;
+
+	Pipeline_t computePipeline;
+	VkDescriptorSetLayout computeDescriptorSetLayout;
 
 	// frame and synchronization resources
 	VkSemaphore timelineSemaphore;
@@ -79,10 +98,16 @@ typedef struct {
 	VkBuffer SSBO;
 	VkDeviceMemory SSBOMemory;
 
+	VkBuffer shaderDataUBO;
+	VkDeviceMemory shaderDataUBOMemory;
+	void* shaderDataMapped;
+
 
 	//shader
 	VkShaderModule vertShader;
 	VkShaderModule fragShader;
+
+	VkShaderModule computeShader;
 }  Display_t;
 
 
@@ -103,6 +128,9 @@ VkQueue createGraphicsQueue(Display_t* display);
 uint32_t findMemoryTypeIndex(Display_t* display, uint32_t typeBits, VkMemoryPropertyFlags required);
 
 void createDepthImage(Display_t* display);
+
+void createOutputimage(Display_t* display);
+
 void createSwapchain(Display_t* display);
 
 void destroySwapchain();
@@ -111,8 +139,13 @@ void createShaders(Display_t* display);
 
 void createBuffer(Display_t* display, VkDeviceSize size);
 
+void createShaderDataUBO(Display_t* display);
+
 
 Pipeline_t createGraphicsPipeline(Display_t* display);
+
+Pipeline_t createComputePipeline(Display_t* display);
+
 
 void createSyncResources(Display_t* display);
 void createCommandBuffers(Display_t* display);

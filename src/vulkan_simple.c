@@ -24,11 +24,14 @@ bool display_init(Display_t* display) {
     display->gfxQueue = createGraphicsQueue(display);
 
     createDepthImage(display);
+    createOutputimage(display);
+    createShaderDataUBO(display);
     createSwapchain(display);
 
 	createShaders(display);
 
-    display->pipeline = createGraphicsPipeline(display);
+    //display->gfxPipeline = createGraphicsPipeline(display);
+    display->computePipeline = createComputePipeline(display);
 
 	createSyncResources(display);
 
@@ -57,9 +60,14 @@ bool display_close(Display_t* display) {
     vkDestroySemaphore(display->device, display->timelineSemaphore, NULL);
     printf("sync resources destroyed.\n");
 
-    vkDestroyPipeline(display->device, display->pipeline.handle, NULL);
-    vkDestroyPipelineLayout(display->device, display->pipeline.layout, NULL);
-    printf("pipeline destroyed.\n");
+    vkDestroyPipeline(display->device, display->gfxPipeline.handle, NULL);
+    vkDestroyPipelineLayout(display->device, display->gfxPipeline.layout, NULL);
+    printf(" graphics pipeline destroyed.\n");
+
+	vkDestroyPipeline(display->device, display->computePipeline.handle, NULL);
+    vkDestroyPipelineLayout(display->device, display->computePipeline.layout, NULL);
+    vkDestroyDescriptorSetLayout(display->device, display->computeDescriptorSetLayout, NULL);
+    printf("compute pipeline destroyed.\n");
 
     for (uint32_t i = 0; i < display->swapchainImageCount; i++) {
         vkDestroySemaphore(display->device, display->renderCompleteSemaphores[i], NULL);
@@ -75,6 +83,19 @@ bool display_close(Display_t* display) {
     vkDestroyImage(display->device, display->depthImage, NULL);
     vkFreeMemory(display->device, display->depthImageMemory, NULL);
     printf("depth image destroyed.\n");
+
+    vkDestroyImageView(display->device, display->outputImageView, NULL);
+    vkDestroyImage(display->device, display->outputImage, NULL);
+    vkFreeMemory(display->device, display->outputImageMemory, NULL);
+    printf("output image destroyed.\n");
+
+    vkDestroyBuffer(display->device, display->SSBO, NULL);
+    vkFreeMemory(display->device, display->SSBOMemory, NULL);
+    printf("SSBO destroyed.\n");
+
+    vkDestroyBuffer(display->device, display->shaderDataUBO, NULL);
+    vkFreeMemory(display->device, display->shaderDataUBOMemory, NULL);
+    printf("shader data UBO destroyed.\n");
 
     vkDestroyDevice(display->device, NULL);
     printf("device destroyed.\n");
@@ -436,6 +457,60 @@ void createDepthImage(Display_t* display) {
 }
 
 
+void createOutputimage(Display_t* display) {
+	VkImageCreateInfo image_create_info = {0};
+	image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	image_create_info.imageType = VK_IMAGE_TYPE_2D;
+	image_create_info.format = OUTPUT_IMAGE_FORMAT;
+	image_create_info.extent.width = display->width;
+	image_create_info.extent.height = display->height;
+	image_create_info.extent.depth = 1;
+	image_create_info.mipLevels = 1;
+	image_create_info.arrayLayers = 1;
+	image_create_info.samples = VK_SAMPLE_COUNT_1_BIT;
+	image_create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+	image_create_info.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	image_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+	if (vkCreateImage(display->device, &image_create_info, NULL, &display->outputImage) != VK_SUCCESS) {
+		printf("failed to create output image.\n");
+		return;
+	}
+
+	VkMemoryRequirements mem_reqs;
+	vkGetImageMemoryRequirements(display->device, display->outputImage, &mem_reqs);
+
+	VkMemoryAllocateInfo alloc_info = {0};
+	alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	alloc_info.allocationSize = mem_reqs.size;
+	alloc_info.memoryTypeIndex = findMemoryTypeIndex(display, mem_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+	if (vkAllocateMemory(display->device, &alloc_info, NULL, &display->outputImageMemory) != VK_SUCCESS) {
+		printf("failed to allocate output image memory.\n");
+		return;
+	}
+	vkBindImageMemory(display->device, display->outputImage, display->outputImageMemory, 0);
+
+	VkImageViewCreateInfo view_create_info = {0};
+	view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	view_create_info.image = display->outputImage;
+	view_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	view_create_info.format = OUTPUT_IMAGE_FORMAT;
+	view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	view_create_info.subresourceRange.baseMipLevel = 0;
+	view_create_info.subresourceRange.levelCount = 1;
+	view_create_info.subresourceRange.baseArrayLayer = 0;
+	view_create_info.subresourceRange.layerCount = 1;
+
+	if (vkCreateImageView(display->device, &view_create_info, NULL, &display->outputImageView) != VK_SUCCESS) {
+		printf("failed to create output image view.\n");
+		return;
+	}
+
+	printf("output image created.\n");
+}
+
 void createSwapchain(Display_t* display) {
 
     VkSurfaceCapabilitiesKHR surface_capabilities;
@@ -566,63 +641,42 @@ void createSwapchain(Display_t* display) {
     }
     printf("render-complete semaphores created.\n");
 }
+
+
 void createShaders(Display_t* display) {
-	FILE *fp_vert=NULL, *fp_frag=NULL;
+	FILE *fp_compute=NULL;
 
-	fp_vert=fopen("shaders/vert.spv","rb+");
-	fp_frag=fopen("shaders/frag.spv","rb+");
+	fp_compute=fopen("shaders/compute.spv","rb+");
 
-	char shader_loaded=1;
-	if(fp_vert==NULL||fp_frag==NULL){
-		shader_loaded=0;
-		printf("can't find SPIR-V binaries.\n");
+	if(fp_compute==NULL){
+		printf("can't find compute SPIR-V binary.\n");
+		return;
 	}
 
-	fseek(fp_vert,0,SEEK_END);
-	fseek(fp_frag,0,SEEK_END);
-	uint32_t vert_size=ftell(fp_vert);
-	uint32_t frag_size=ftell(fp_frag);
+	fseek(fp_compute,0,SEEK_END);
+	uint32_t compute_size=ftell(fp_compute);
 
-	char *p_vert_code=(char *)malloc(vert_size*sizeof(char));
-	char *p_frag_code=(char *)malloc(frag_size*sizeof(char));
+	char *p_compute_code=(char *)malloc(compute_size*sizeof(char));
 
-	rewind(fp_vert);
-	rewind(fp_frag);
-	fread(p_vert_code,1,vert_size,fp_vert);
-	printf("vertex shader binaries loaded.\n");
-	fread(p_frag_code,1,frag_size,fp_frag);
-	printf("fragment shader binaries loaded.\n");
+	rewind(fp_compute);
+	fread(p_compute_code,1,compute_size,fp_compute);
+	printf("compute shader binary loaded.\n");
 
-	fclose(fp_vert);
-	fclose(fp_frag);
+	fclose(fp_compute);
 
-	//create shader modules
-	VkShaderModuleCreateInfo vertex_shader_module_create_info;
-	vertex_shader_module_create_info.sType=VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	vertex_shader_module_create_info.pNext=NULL;
-	vertex_shader_module_create_info.flags=0;
-	vertex_shader_module_create_info.codeSize=shader_loaded? vert_size:0;
-	vertex_shader_module_create_info.pCode= shader_loaded ? (const uint32_t *)p_vert_code : NULL;
+	//create shader module
+	VkShaderModuleCreateInfo compute_shader_module_create_info;
+	compute_shader_module_create_info.sType=VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	compute_shader_module_create_info.pNext=NULL;
+	compute_shader_module_create_info.flags=0;
+	compute_shader_module_create_info.codeSize=compute_size;
+	compute_shader_module_create_info.pCode=(const uint32_t *)p_compute_code;
 
-	VkShaderModuleCreateInfo fragment_shader_module_create_info;
-	fragment_shader_module_create_info.sType= VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	fragment_shader_module_create_info.pNext=NULL;
-	fragment_shader_module_create_info.flags=0;
-	fragment_shader_module_create_info.codeSize=shader_loaded?frag_size:0;
-	fragment_shader_module_create_info.pCode= shader_loaded ? (const uint32_t *)p_frag_code : NULL;
+	vkCreateShaderModule(display->device,&compute_shader_module_create_info,NULL,&display->computeShader);
+	printf("compute shader module created.\n");
 
-
-	vkCreateShaderModule (display->device,&vertex_shader_module_create_info,NULL,&display->vertShader);
-	printf("vertex shader module created.\n");
-	vkCreateShaderModule(display->device,&fragment_shader_module_create_info,NULL,&display->fragShader);
-	printf("fragment shader module created.\n");
-
-	free(p_frag_code);
-	printf("fragment shader binaries released.\n");
-	free(p_vert_code);
-	printf("vertex shader binaries released.\n");
-
-
+	free(p_compute_code);
+	printf("compute shader binary released.\n");
 }
 
 Pipeline_t createGraphicsPipeline(Display_t* display) {
@@ -747,6 +801,76 @@ Pipeline_t createGraphicsPipeline(Display_t* display) {
 	printf("vertex shader module destroyed.\n");
 
 	printf("graphics pipeline created.\n");
+	return pipeline;
+}
+
+
+Pipeline_t createComputePipeline(Display_t* display) {
+	Pipeline_t pipeline = {0};
+
+	VkDescriptorSetLayoutBinding bindings[3] = {0};
+	bindings[0].binding = 1;
+	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	bindings[0].descriptorCount = 1;
+	bindings[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	bindings[1].binding = 3;
+	bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	bindings[1].descriptorCount = 1;
+	bindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	bindings[2].binding = 4;
+	bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	bindings[2].descriptorCount = 1;
+	bindings[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	VkDescriptorSetLayoutCreateInfo set_layout_info = {0};
+	set_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	set_layout_info.bindingCount = 3;
+	set_layout_info.pBindings = bindings;
+
+	if (vkCreateDescriptorSetLayout(display->device, &set_layout_info, NULL, &display->computeDescriptorSetLayout) != VK_SUCCESS) {
+		printf("Unable to create the compute descriptor set layout\n");
+		return (Pipeline_t){0};
+	}
+
+	VkPushConstantRange push_constant_range = {0};
+	push_constant_range.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	push_constant_range.offset = 0;
+	push_constant_range.size = sizeof(uint32_t);
+
+	VkPipelineLayoutCreateInfo pipeline_layout_info = {0};
+	pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipeline_layout_info.setLayoutCount = 1;
+	pipeline_layout_info.pSetLayouts = &display->computeDescriptorSetLayout;
+	pipeline_layout_info.pushConstantRangeCount = 1;
+	pipeline_layout_info.pPushConstantRanges = &push_constant_range;
+
+	if (vkCreatePipelineLayout(display->device, &pipeline_layout_info, NULL, &pipeline.layout) != VK_SUCCESS) {
+		printf("Unable to create the compute pipeline layout\n");
+		return (Pipeline_t){0};
+	}
+
+	VkPipelineShaderStageCreateInfo stage_info = {0};
+	stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stage_info.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+	stage_info.module = display->computeShader;
+	stage_info.pName = "main";
+
+	VkComputePipelineCreateInfo compute_pipeline_info = {0};
+	compute_pipeline_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	compute_pipeline_info.stage = stage_info;
+	compute_pipeline_info.layout = pipeline.layout;
+
+	if (vkCreateComputePipelines(display->device, VK_NULL_HANDLE, 1, &compute_pipeline_info, NULL, &pipeline.handle) != VK_SUCCESS) {
+		printf("Error creating the compute pipeline\n");
+		return (Pipeline_t){0};
+	}
+
+	vkDestroyShaderModule(display->device, display->computeShader, NULL);
+	printf("compute shader module destroyed.\n");
+
+	printf("compute pipeline created.\n");
 	return pipeline;
 }
 
@@ -944,7 +1068,7 @@ void render(Display_t* display) {
 	scissor.extent.height=display->swapchainHeight;
 	vkCmdSetScissor(res->commandBuffer, 0, 1, &scissor);
 
-	vkCmdBindPipeline(res->commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, display->pipeline.handle);
+	vkCmdBindPipeline(res->commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, display->gfxPipeline.handle);
 
 	vkCmdDraw(res->commandBuffer, 3, 1, 0, 0);
 
@@ -1052,6 +1176,39 @@ void createBuffer(Display_t* display, VkDeviceSize size) {
 	vkBindBufferMemory(display->device, display->SSBO, display->SSBOMemory, 0);
 
 	printf("SSBO created.\n");
+}
+
+void createShaderDataUBO(Display_t* display) {
+
+	VkBufferCreateInfo buffer_info = {0};
+	buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	buffer_info.size = sizeof(ShaderDataUBO);
+	buffer_info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+	buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	if (vkCreateBuffer(display->device, &buffer_info, NULL, &display->shaderDataUBO) != VK_SUCCESS) {
+		printf("failed to create shader data UBO.\n");
+		return;
+	}
+
+	VkMemoryRequirements mem_reqs;
+	vkGetBufferMemoryRequirements(display->device, display->shaderDataUBO, &mem_reqs);
+
+	VkMemoryAllocateInfo alloc_info = {0};
+	alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	alloc_info.allocationSize = mem_reqs.size;
+	alloc_info.memoryTypeIndex = findMemoryTypeIndex(display, mem_reqs.memoryTypeBits,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+	if (vkAllocateMemory(display->device, &alloc_info, NULL, &display->shaderDataUBOMemory) != VK_SUCCESS) {
+		printf("failed to allocate shader data UBO memory.\n");
+		return;
+	}
+	vkBindBufferMemory(display->device, display->shaderDataUBO, display->shaderDataUBOMemory, 0);
+
+	vkMapMemory(display->device, display->shaderDataUBOMemory, 0, sizeof(ShaderDataUBO), 0, &display->shaderDataMapped);
+
+	printf("shader data UBO created.\n");
 }
 
 
