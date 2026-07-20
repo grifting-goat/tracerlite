@@ -12,6 +12,7 @@
 #include "GLFW/glfw3.h"
 
 #include "stb_image.h"
+#include "world.h"
 
 
 // Configuration constants
@@ -20,6 +21,7 @@
 #define SWAPCHAIN_FORMAT      VK_FORMAT_B8G8R8A8_SRGB
 #define DEPTH_FORMAT          VK_FORMAT_D32_SFLOAT
 #define OUTPUT_IMAGE_FORMAT   VK_FORMAT_R8G8B8A8_UNORM
+#define VOXEL_GRID_DIM         1024U // placeholder 
 
 
 // inspired by https://github.com/nickenchev/modern-vulkan
@@ -30,7 +32,7 @@ typedef struct {
 	VkPipeline handle;
 } Pipeline_t;
 
-// must match the `shader_data` cbuffer layout in shaders/shader.hlsl exactly (HLSL cbuffer packing rules)
+// HLSL cbuffer packing 
 typedef struct {
 	float camera_position[4];
 	float camera_rotation[4];
@@ -90,6 +92,8 @@ typedef struct {
 
 	Pipeline_t computePipeline;
 	VkDescriptorSetLayout computeDescriptorSetLayout;
+	VkDescriptorPool computeDescriptorPool;
+	VkDescriptorSet computeDescriptorSet;
 
 	// frame and synchronization resources
 	VkSemaphore timelineSemaphore;
@@ -141,10 +145,14 @@ void createBuffer(Display_t* display, VkDeviceSize size);
 
 void createShaderDataUBO(Display_t* display);
 
+void uploadWorldToSSBO(Display_t* display, World* world);
+
 
 Pipeline_t createGraphicsPipeline(Display_t* display);
 
 Pipeline_t createComputePipeline(Display_t* display);
+
+void createComputeDescriptorSet(Display_t* display);
 
 
 void createSyncResources(Display_t* display);

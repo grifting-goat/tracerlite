@@ -23,6 +23,12 @@ struct PushConstants {
 [[vk::push_constant]] PushConstants pc;
 
 static const float FLT_INF = asfloat(0x7F800000);
+static const float MAX_RAY_DISTANCE = 40.0f;
+
+struct Hit {
+    int type;
+    float dist;
+};
 
 struct Ray {
     float3 origin;
@@ -85,7 +91,7 @@ uint ReadVoxel(uint index) {
     return (word >> shift) & 0xFFu;
 }
 
-bool CastRay(Ray ray) {
+Hit CastRay(Ray ray) {
 
     int x = int(ray.origin.x);
     int y = int(ray.origin.y);
@@ -107,36 +113,51 @@ bool CastRay(Ray ray) {
     float tMaxY = (ray.direction.y != 0) ? (nextBoundaryY - ray.origin.y) / ray.direction.y : FLT_INF;
     float tMaxZ = (ray.direction.z != 0) ? (nextBoundaryZ - ray.origin.z) / ray.direction.z : FLT_INF;
 
-    bool hit = false;
-    while (!hit) {
+    Hit hit;
+    hit.type = 0;
+    hit.dist = FLT_INF;
+
+    float tCurrent = 0.0f;
+
+    while (hit.type == 0) {
+        if (tCurrent > MAX_RAY_DISTANCE) {
+            return hit;
+        }
+
         if (x < 0 || x >= _voxel_grid_size.x ||
             y < 0 || y >= _voxel_grid_size.y ||
             z < 0 || z >= _voxel_grid_size.z) {
-            return false;
+            return hit;
         }
 
         uint voxelIndex = uint(x) + uint(y) * uint(_voxel_grid_size.x) + uint(z) * uint(_voxel_grid_size.x) * uint(_voxel_grid_size.y);
-        hit = ReadVoxel(voxelIndex) != 0;
-        if (hit) {
+
+        hit.type = int(ReadVoxel(voxelIndex));
+        if (hit.type != 0) {
+            hit.dist = tCurrent;
             break;
         }
 
         if (tMaxX < tMaxY) {
             if (tMaxX < tMaxZ) {
+                tCurrent = tMaxX;
                 x = x + stepX;
                 tMaxX = tMaxX + tDeltaX;
             }
             else {
+                tCurrent = tMaxZ;
                 z = z + stepZ;
                 tMaxZ = tMaxZ + tDeltaZ;
             }
         }
         else {
             if (tMaxY < tMaxZ) {
+                tCurrent = tMaxY;
                 y = y + stepY;
                 tMaxY = tMaxY + tDeltaY;
             }
             else {
+                tCurrent = tMaxZ;
                 z = z + stepZ;
                 tMaxZ = tMaxZ + tDeltaZ;
             }
@@ -157,8 +178,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID) {
     float y = (float(pixel.y) + 0.5f) / float(_screen_size.y);
 
     Ray r = CreateCameraRay(x, y);
-    bool hit = CastRay(r);
+    Hit hit = CastRay(r);
 
-    float4 color = hit ? float4(1.0f, 1.0f, 1.0f, 1.0f) : float4(0.0f, 0.0f, 0.0f, 1.0f);
+    float alpha = hit.dist / MAX_RAY_DISTANCE;
+    if (alpha > 1.0) {alpha = 1.0;}
+
+    float shade = 1.0f - alpha;
+
+    float4 color = hit.type ? float4(shade * (hit.type == 1), shade * (hit.type == 2), shade * (hit.type == 3), 1.0f) : float4(0.0f, 0.0f, 0.0f, 1.0f);
     outputImage[pixel] = color;
 }

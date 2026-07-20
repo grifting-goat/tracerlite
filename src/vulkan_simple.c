@@ -8,7 +8,7 @@ void set_properties(Display_t* display, const char* name, uint32_t width, uint32
 bool display_init(Display_t* display) {
     glfwInit();
     
-    set_properties(display, "Tracerlite", 1280U, 720U);
+    set_properties(display, "Tracerlite", 1920U, 1080U);
 
     //order matters
 
@@ -26,12 +26,29 @@ bool display_init(Display_t* display) {
     createDepthImage(display);
     createOutputimage(display);
     createShaderDataUBO(display);
+    createBuffer(display, (VkDeviceSize)VOXEL_GRID_DIM * VOXEL_GRID_DIM * VOXEL_GRID_DIM * sizeof(uint8_t));
     createSwapchain(display);
 
 	createShaders(display);
 
     //display->gfxPipeline = createGraphicsPipeline(display);
     display->computePipeline = createComputePipeline(display);
+    createComputeDescriptorSet(display);
+
+    // placeholder camera/screen data 
+    ShaderDataUBO initial_shader_data = {0};
+	initial_shader_data.camera_position[0] = (float)VOXEL_GRID_DIM / 2.0f;
+	initial_shader_data.camera_position[1] = (float)VOXEL_GRID_DIM / 2.0f;
+    initial_shader_data.camera_position[2] = (float)VOXEL_GRID_DIM / 2.0f;
+    initial_shader_data.camera_position[3] = 1.0f;
+    initial_shader_data.screen_size[0] = (int32_t)display->width;
+    initial_shader_data.screen_size[1] = (int32_t)display->height;
+    initial_shader_data.pixel_count = (int32_t)(display->width * display->height);
+    initial_shader_data.fov = 90.0f * (3.14159265f / 180.0f);
+    initial_shader_data.voxel_grid_size[0] = VOXEL_GRID_DIM;
+    initial_shader_data.voxel_grid_size[1] = VOXEL_GRID_DIM;
+    initial_shader_data.voxel_grid_size[2] = VOXEL_GRID_DIM;
+    memcpy(display->shaderDataMapped, &initial_shader_data, sizeof(ShaderDataUBO));
 
 	createSyncResources(display);
 
@@ -66,6 +83,7 @@ bool display_close(Display_t* display) {
 
 	vkDestroyPipeline(display->device, display->computePipeline.handle, NULL);
     vkDestroyPipelineLayout(display->device, display->computePipeline.layout, NULL);
+    vkDestroyDescriptorPool(display->device, display->computeDescriptorPool, NULL);
     vkDestroyDescriptorSetLayout(display->device, display->computeDescriptorSetLayout, NULL);
     printf("compute pipeline destroyed.\n");
 
@@ -171,7 +189,20 @@ VkSurfaceKHR createSurface(Display_t* display) {
 GLFWwindow* createWindow(Display_t* display) {
     glfwWindowHint(GLFW_CLIENT_API,GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE,GLFW_FALSE);
+	glfwWindowHint(GLFW_DECORATED,GLFW_FALSE);
+
+	const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+	display->width = (uint32_t)mode->width;
+	display->height = (uint32_t)mode->height;
+	display->swapchainWidth = display->width;
+	display->swapchainHeight = display->height;
+
 	GLFWwindow *window = glfwCreateWindow(display->width,display->height,display->name,NULL,NULL);
+
+	int monitorX, monitorY;
+	glfwGetMonitorPos(glfwGetPrimaryMonitor(), &monitorX, &monitorY);
+	glfwSetWindowPos(window, monitorX, monitorY);
+
 	printf("window created.\n");
 
 	GLFWimage icons[3];
@@ -574,7 +605,7 @@ void createSwapchain(Display_t* display) {
 	swap_create_info.imageColorSpace=chosen_format.colorSpace;
 	swap_create_info.imageExtent = actual_extent;
 	swap_create_info.imageArrayLayers=1;
-	swap_create_info.imageUsage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	swap_create_info.imageUsage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
 	swap_create_info.imageSharingMode=VK_SHARING_MODE_EXCLUSIVE;
 	swap_create_info.queueFamilyIndexCount=0;
@@ -874,6 +905,79 @@ Pipeline_t createComputePipeline(Display_t* display) {
 	return pipeline;
 }
 
+void createComputeDescriptorSet(Display_t* display) {
+
+	VkDescriptorPoolSize pool_sizes[3] = {0};
+	pool_sizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	pool_sizes[0].descriptorCount = 1;
+	pool_sizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	pool_sizes[1].descriptorCount = 1;
+	pool_sizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	pool_sizes[2].descriptorCount = 1;
+
+	VkDescriptorPoolCreateInfo pool_info = {0};
+	pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	pool_info.maxSets = 1;
+	pool_info.poolSizeCount = 3;
+	pool_info.pPoolSizes = pool_sizes;
+
+	if (vkCreateDescriptorPool(display->device, &pool_info, NULL, &display->computeDescriptorPool) != VK_SUCCESS) {
+		printf("Unable to create the compute descriptor pool\n");
+		return;
+	}
+
+	VkDescriptorSetAllocateInfo set_alloc_info = {0};
+	set_alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	set_alloc_info.descriptorPool = display->computeDescriptorPool;
+	set_alloc_info.descriptorSetCount = 1;
+	set_alloc_info.pSetLayouts = &display->computeDescriptorSetLayout;
+
+	if (vkAllocateDescriptorSets(display->device, &set_alloc_info, &display->computeDescriptorSet) != VK_SUCCESS) {
+		printf("Unable to allocate the compute descriptor set\n");
+		return;
+	}
+
+	VkDescriptorBufferInfo ssbo_info = {0};
+	ssbo_info.buffer = display->SSBO;
+	ssbo_info.offset = 0;
+	ssbo_info.range = VK_WHOLE_SIZE;
+
+	VkDescriptorBufferInfo ubo_info = {0};
+	ubo_info.buffer = display->shaderDataUBO;
+	ubo_info.offset = 0;
+	ubo_info.range = VK_WHOLE_SIZE;
+
+	VkDescriptorImageInfo image_info = {0};
+	image_info.imageView = display->outputImageView;
+	image_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+	VkWriteDescriptorSet writes[3] = {0};
+	writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes[0].dstSet = display->computeDescriptorSet;
+	writes[0].dstBinding = 1;
+	writes[0].descriptorCount = 1;
+	writes[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	writes[0].pBufferInfo = &ssbo_info;
+
+	writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes[1].dstSet = display->computeDescriptorSet;
+	writes[1].dstBinding = 3;
+	writes[1].descriptorCount = 1;
+	writes[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	writes[1].pBufferInfo = &ubo_info;
+
+	writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes[2].dstSet = display->computeDescriptorSet;
+	writes[2].dstBinding = 4;
+	writes[2].descriptorCount = 1;
+	writes[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	writes[2].pImageInfo = &image_info;
+
+	vkUpdateDescriptorSets(display->device, 3, writes, 0, NULL);
+
+	printf("compute descriptor set created.\n");
+}
+
 
 void createSyncResources(Display_t* display) {
 
@@ -949,6 +1053,7 @@ void render(Display_t* display) {
 	static uint32_t frame_counter = 0;
 	static uint64_t timeline_value = 0;
 
+
 	uint32_t frame_res_index = frame_counter++ % MAX_FRAMES_IN_FLIGHT;
 	FrameResources_t *res = &display->frameResources[frame_res_index];
 
@@ -977,111 +1082,112 @@ void render(Display_t* display) {
 	cmd_begin_info.flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 	vkBeginCommandBuffer(res->commandBuffer, &cmd_begin_info);
 
-	//transition color and depth images for rendering
-	VkImageMemoryBarrier2 layout_barriers[2];
-	layout_barriers[0].sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-	layout_barriers[0].pNext=NULL;
-	layout_barriers[0].srcStageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-	layout_barriers[0].srcAccessMask=0;
-	layout_barriers[0].dstStageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-	layout_barriers[0].dstAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-	layout_barriers[0].oldLayout=VK_IMAGE_LAYOUT_UNDEFINED;
-	layout_barriers[0].newLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	layout_barriers[0].srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
-	layout_barriers[0].dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
-	layout_barriers[0].image=display->swapchainImages[image_index];
-	layout_barriers[0].subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
-	layout_barriers[0].subresourceRange.baseMipLevel=0;
-	layout_barriers[0].subresourceRange.levelCount=1;
-	layout_barriers[0].subresourceRange.baseArrayLayer=0;
-	layout_barriers[0].subresourceRange.layerCount=1;
+	//transition output image so the compute shader can imageStore into it
+	VkImageMemoryBarrier2 to_general_barrier={0};
+	to_general_barrier.sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+	to_general_barrier.srcStageMask=VK_PIPELINE_STAGE_2_NONE;
+	to_general_barrier.srcAccessMask=0;
+	to_general_barrier.dstStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+	to_general_barrier.dstAccessMask=VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+	to_general_barrier.oldLayout=VK_IMAGE_LAYOUT_UNDEFINED;
+	to_general_barrier.newLayout=VK_IMAGE_LAYOUT_GENERAL;
+	to_general_barrier.srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
+	to_general_barrier.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
+	to_general_barrier.image=display->outputImage;
+	to_general_barrier.subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
+	to_general_barrier.subresourceRange.baseMipLevel=0;
+	to_general_barrier.subresourceRange.levelCount=1;
+	to_general_barrier.subresourceRange.baseArrayLayer=0;
+	to_general_barrier.subresourceRange.layerCount=1;
 
-	layout_barriers[1].sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-	layout_barriers[1].pNext=NULL;
-	layout_barriers[1].srcStageMask=VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT|VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
-	layout_barriers[1].srcAccessMask=VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-	layout_barriers[1].dstStageMask=VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT|VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
-	layout_barriers[1].dstAccessMask=VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-	layout_barriers[1].oldLayout=VK_IMAGE_LAYOUT_UNDEFINED;
-	layout_barriers[1].newLayout=VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-	layout_barriers[1].srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
-	layout_barriers[1].dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
-	layout_barriers[1].image=display->depthImage;
-	layout_barriers[1].subresourceRange.aspectMask=VK_IMAGE_ASPECT_DEPTH_BIT;
-	layout_barriers[1].subresourceRange.baseMipLevel=0;
-	layout_barriers[1].subresourceRange.levelCount=1;
-	layout_barriers[1].subresourceRange.baseArrayLayer=0;
-	layout_barriers[1].subresourceRange.layerCount=1;
+	VkDependencyInfo pre_dispatch_dep_info={0};
+	pre_dispatch_dep_info.sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	pre_dispatch_dep_info.imageMemoryBarrierCount=1;
+	pre_dispatch_dep_info.pImageMemoryBarriers=&to_general_barrier;
+	vkCmdPipelineBarrier2(res->commandBuffer, &pre_dispatch_dep_info);
 
-	VkDependencyInfo dep_info={0};
-	dep_info.sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-	dep_info.imageMemoryBarrierCount=2;
-	dep_info.pImageMemoryBarriers=layout_barriers;
-	vkCmdPipelineBarrier2(res->commandBuffer, &dep_info);
+	vkCmdBindPipeline(res->commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, display->computePipeline.handle);
+	vkCmdBindDescriptorSets(res->commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, display->computePipeline.layout, 0, 1, &display->computeDescriptorSet, 0, NULL);
 
-	VkRenderingAttachmentInfo color_attach_info={0};
-	color_attach_info.sType=VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-	color_attach_info.imageView=display->swapchainImageViews[image_index];
-	color_attach_info.imageLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	color_attach_info.loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR;
-	color_attach_info.storeOp=VK_ATTACHMENT_STORE_OP_STORE;
-	color_attach_info.clearValue.color.float32[0]=0.0f;
-	color_attach_info.clearValue.color.float32[1]=0.0f;
-	color_attach_info.clearValue.color.float32[2]=0.0f;
-	color_attach_info.clearValue.color.float32[3]=1.0f;
+	uint32_t voxel_count = VOXEL_GRID_DIM * VOXEL_GRID_DIM * VOXEL_GRID_DIM;
+	vkCmdPushConstants(res->commandBuffer, display->computePipeline.layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(uint32_t), &voxel_count);
 
-	VkRenderingAttachmentInfo depth_attach_info={0};
-	depth_attach_info.sType=VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-	depth_attach_info.imageView=display->depthImageView;
-	depth_attach_info.imageLayout=VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-	depth_attach_info.loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR;
-	depth_attach_info.storeOp=VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	depth_attach_info.clearValue.depthStencil.depth=1.0f;
-	depth_attach_info.clearValue.depthStencil.stencil=0;
+	uint32_t group_count_x = (display->swapchainWidth + 7) / 8;
+	uint32_t group_count_y = (display->swapchainHeight + 7) / 8;
+	vkCmdDispatch(res->commandBuffer, group_count_x, group_count_y, 1);
 
-	VkRenderingInfo rendering_info={0};
-	rendering_info.sType=VK_STRUCTURE_TYPE_RENDERING_INFO;
-	rendering_info.renderArea.offset.x=0;
-	rendering_info.renderArea.offset.y=0;
-	rendering_info.renderArea.extent.width=display->swapchainWidth;
-	rendering_info.renderArea.extent.height=display->swapchainHeight;
-	rendering_info.layerCount=1;
-	rendering_info.colorAttachmentCount=1;
-	rendering_info.pColorAttachments=&color_attach_info;
-	rendering_info.pDepthAttachment=&depth_attach_info;
+	//transition output image (blit source) and swapchain image (blit destination)
+	VkImageMemoryBarrier2 pre_blit_barriers[2];
+	pre_blit_barriers[0].sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+	pre_blit_barriers[0].pNext=NULL;
+	pre_blit_barriers[0].srcStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+	pre_blit_barriers[0].srcAccessMask=VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+	pre_blit_barriers[0].dstStageMask=VK_PIPELINE_STAGE_2_BLIT_BIT;
+	pre_blit_barriers[0].dstAccessMask=VK_ACCESS_2_TRANSFER_READ_BIT;
+	pre_blit_barriers[0].oldLayout=VK_IMAGE_LAYOUT_GENERAL;
+	pre_blit_barriers[0].newLayout=VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+	pre_blit_barriers[0].srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
+	pre_blit_barriers[0].dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
+	pre_blit_barriers[0].image=display->outputImage;
+	pre_blit_barriers[0].subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
+	pre_blit_barriers[0].subresourceRange.baseMipLevel=0;
+	pre_blit_barriers[0].subresourceRange.levelCount=1;
+	pre_blit_barriers[0].subresourceRange.baseArrayLayer=0;
+	pre_blit_barriers[0].subresourceRange.layerCount=1;
 
-	vkCmdBeginRendering(res->commandBuffer, &rendering_info);
+	pre_blit_barriers[1].sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+	pre_blit_barriers[1].pNext=NULL;
+	pre_blit_barriers[1].srcStageMask=VK_PIPELINE_STAGE_2_NONE;
+	pre_blit_barriers[1].srcAccessMask=0;
+	pre_blit_barriers[1].dstStageMask=VK_PIPELINE_STAGE_2_BLIT_BIT;
+	pre_blit_barriers[1].dstAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT;
+	pre_blit_barriers[1].oldLayout=VK_IMAGE_LAYOUT_UNDEFINED;
+	pre_blit_barriers[1].newLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	pre_blit_barriers[1].srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
+	pre_blit_barriers[1].dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
+	pre_blit_barriers[1].image=display->swapchainImages[image_index];
+	pre_blit_barriers[1].subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
+	pre_blit_barriers[1].subresourceRange.baseMipLevel=0;
+	pre_blit_barriers[1].subresourceRange.levelCount=1;
+	pre_blit_barriers[1].subresourceRange.baseArrayLayer=0;
+	pre_blit_barriers[1].subresourceRange.layerCount=1;
 
-	VkViewport viewport;
-	viewport.x=0.0f;
-	viewport.y=0.0f;
-	viewport.width=(float)display->swapchainWidth;
-	viewport.height=(float)display->swapchainHeight;
-	viewport.minDepth=0.0f;
-	viewport.maxDepth=1.0f;
-	vkCmdSetViewport(res->commandBuffer, 0, 1, &viewport);
+	VkDependencyInfo pre_blit_dep_info={0};
+	pre_blit_dep_info.sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	pre_blit_dep_info.imageMemoryBarrierCount=2;
+	pre_blit_dep_info.pImageMemoryBarriers=pre_blit_barriers;
+	vkCmdPipelineBarrier2(res->commandBuffer, &pre_blit_dep_info);
 
-	VkRect2D scissor;
-	scissor.offset.x=0;
-	scissor.offset.y=0;
-	scissor.extent.width=display->swapchainWidth;
-	scissor.extent.height=display->swapchainHeight;
-	vkCmdSetScissor(res->commandBuffer, 0, 1, &scissor);
+	VkImageBlit blit_region={0};
+	blit_region.srcSubresource.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
+	blit_region.srcSubresource.mipLevel=0;
+	blit_region.srcSubresource.baseArrayLayer=0;
+	blit_region.srcSubresource.layerCount=1;
+	blit_region.srcOffsets[1].x=(int32_t)display->swapchainWidth;
+	blit_region.srcOffsets[1].y=(int32_t)display->swapchainHeight;
+	blit_region.srcOffsets[1].z=1;
 
-	vkCmdBindPipeline(res->commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, display->gfxPipeline.handle);
+	blit_region.dstSubresource.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
+	blit_region.dstSubresource.mipLevel=0;
+	blit_region.dstSubresource.baseArrayLayer=0;
+	blit_region.dstSubresource.layerCount=1;
+	blit_region.dstOffsets[1].x=(int32_t)display->swapchainWidth;
+	blit_region.dstOffsets[1].y=(int32_t)display->swapchainHeight;
+	blit_region.dstOffsets[1].z=1;
 
-	vkCmdDraw(res->commandBuffer, 3, 1, 0, 0);
+	vkCmdBlitImage(res->commandBuffer,
+		display->outputImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		display->swapchainImages[image_index], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		1, &blit_region, VK_FILTER_NEAREST);
 
-	vkCmdEndRendering(res->commandBuffer);
-
-	//transition color image to presentable layout
+	//transition swapchain image to presentable layout
 	VkImageMemoryBarrier2 present_barrier={0};
 	present_barrier.sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-	present_barrier.srcStageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-	present_barrier.srcAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+	present_barrier.srcStageMask=VK_PIPELINE_STAGE_2_BLIT_BIT;
+	present_barrier.srcAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT;
 	present_barrier.dstStageMask=VK_PIPELINE_STAGE_2_NONE;
 	present_barrier.dstAccessMask=0;
-	present_barrier.oldLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	present_barrier.oldLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 	present_barrier.newLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 	present_barrier.srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
 	present_barrier.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
@@ -1103,14 +1209,14 @@ void render(Display_t* display) {
 	VkSemaphoreSubmitInfo wait_semaphore_info={0};
 	wait_semaphore_info.sType=VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
 	wait_semaphore_info.semaphore=res->imageAcquiredSemaphore;
-	wait_semaphore_info.stageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT|VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT;
+	wait_semaphore_info.stageMask=VK_PIPELINE_STAGE_2_BLIT_BIT;
 
 	VkSemaphoreSubmitInfo signal_semaphore_infos[2];
 	signal_semaphore_infos[0].sType=VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
 	signal_semaphore_infos[0].pNext=NULL;
 	signal_semaphore_infos[0].semaphore=display->renderCompleteSemaphores[image_index];
 	signal_semaphore_infos[0].value=0;
-	signal_semaphore_infos[0].stageMask=VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT;
+	signal_semaphore_infos[0].stageMask=VK_PIPELINE_STAGE_2_BLIT_BIT;
 	signal_semaphore_infos[0].deviceIndex=0;
 
 	signal_semaphore_infos[1].sType=VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
@@ -1209,6 +1315,87 @@ void createShaderDataUBO(Display_t* display) {
 	vkMapMemory(display->device, display->shaderDataUBOMemory, 0, sizeof(ShaderDataUBO), 0, &display->shaderDataMapped);
 
 	printf("shader data UBO created.\n");
+}
+
+void uploadWorldToSSBO(Display_t* display, World* world) {
+	VkDeviceSize size = (VkDeviceSize)world->world_size * sizeof(uint8_t);
+
+	VkBufferCreateInfo staging_buffer_info = {0};
+	staging_buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	staging_buffer_info.size = size;
+	staging_buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+	staging_buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	VkBuffer staging_buffer;
+	if (vkCreateBuffer(display->device, &staging_buffer_info, NULL, &staging_buffer) != VK_SUCCESS) {
+		printf("failed to create world staging buffer.\n");
+		return;
+	}
+
+	VkMemoryRequirements mem_reqs;
+	vkGetBufferMemoryRequirements(display->device, staging_buffer, &mem_reqs);
+
+	VkMemoryAllocateInfo alloc_info = {0};
+	alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	alloc_info.allocationSize = mem_reqs.size;
+	alloc_info.memoryTypeIndex = findMemoryTypeIndex(display, mem_reqs.memoryTypeBits,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+	VkDeviceMemory staging_memory;
+	if (vkAllocateMemory(display->device, &alloc_info, NULL, &staging_memory) != VK_SUCCESS) {
+		printf("failed to allocate world staging buffer memory.\n");
+		vkDestroyBuffer(display->device, staging_buffer, NULL);
+		return;
+	}
+	vkBindBufferMemory(display->device, staging_buffer, staging_memory, 0);
+
+	void* mapped;
+	vkMapMemory(display->device, staging_memory, 0, size, 0, &mapped);
+	memcpy(mapped, world->voxels, size);
+	vkUnmapMemory(display->device, staging_memory);
+
+	VkCommandPoolCreateInfo pool_info = {0};
+	pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	pool_info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+	pool_info.queueFamilyIndex = display->gfxQueueFamIdx;
+
+	VkCommandPool upload_pool;
+	vkCreateCommandPool(display->device, &pool_info, NULL, &upload_pool);
+
+	VkCommandBufferAllocateInfo cmd_alloc_info = {0};
+	cmd_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	cmd_alloc_info.commandPool = upload_pool;
+	cmd_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	cmd_alloc_info.commandBufferCount = 1;
+
+	VkCommandBuffer cmd;
+	vkAllocateCommandBuffers(display->device, &cmd_alloc_info, &cmd);
+
+	VkCommandBufferBeginInfo begin_info = {0};
+	begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	vkBeginCommandBuffer(cmd, &begin_info);
+
+	VkBufferCopy copy_region = {0};
+	copy_region.size = size;
+	vkCmdCopyBuffer(cmd, staging_buffer, display->SSBO, 1, &copy_region);
+
+	vkEndCommandBuffer(cmd);
+
+	VkSubmitInfo submit_info = {0};
+	submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submit_info.commandBufferCount = 1;
+	submit_info.pCommandBuffers = &cmd;
+
+	vkQueueSubmit(display->gfxQueue, 1, &submit_info, VK_NULL_HANDLE);
+	vkQueueWaitIdle(display->gfxQueue);
+
+	vkFreeCommandBuffers(display->device, upload_pool, 1, &cmd);
+	vkDestroyCommandPool(display->device, upload_pool, NULL);
+	vkDestroyBuffer(display->device, staging_buffer, NULL);
+	vkFreeMemory(display->device, staging_memory, NULL);
+
+	printf("world uploaded to SSBO.\n");
 }
 
 
