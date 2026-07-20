@@ -76,6 +76,9 @@ typedef struct {
 	VkSemaphore timelineSemaphore;
 	FrameResources_t frameResources[MAX_FRAMES_IN_FLIGHT];
 
+	VkBuffer SSBO;
+	VkDeviceMemory SSBOMemory;
+
 
 	//shader
 	VkShaderModule vertShader;
@@ -105,6 +108,8 @@ void createSwapchain(Display_t* display);
 void destroySwapchain();
 
 void createShaders(Display_t* display);
+
+void createBuffer(Display_t* display, VkDeviceSize size);
 
 
 Pipeline_t createGraphicsPipeline(Display_t* display);

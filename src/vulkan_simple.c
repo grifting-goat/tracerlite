@@ -821,7 +821,6 @@ void createCommandBuffers(Display_t* display) {
 }
 
 
-//redo this bc i had claude finish it so i could go to bed with this finished
 void render(Display_t* display) {
 	static uint32_t frame_counter = 0;
 	static uint64_t timeline_value = 0;
@@ -947,7 +946,6 @@ void render(Display_t* display) {
 
 	vkCmdBindPipeline(res->commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, display->pipeline.handle);
 
-	//hardcoded triangle, no vertex/index buffers or push constants yet
 	vkCmdDraw(res->commandBuffer, 3, 1, 0, 0);
 
 	vkCmdEndRendering(res->commandBuffer);
@@ -1023,6 +1021,37 @@ void render(Display_t* display) {
 	present_info.pResults=NULL;
 
 	vkQueuePresentKHR(display->gfxQueue, &present_info);
+}
+
+
+void createBuffer(Display_t* display, VkDeviceSize size) {
+
+	VkBufferCreateInfo buffer_info = {0};
+	buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	buffer_info.size = size;
+	buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+	buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	if (vkCreateBuffer(display->device, &buffer_info, NULL, &display->SSBO) != VK_SUCCESS) {
+		printf("failed to create SSBO.\n");
+		return;
+	}
+
+	VkMemoryRequirements mem_reqs;
+	vkGetBufferMemoryRequirements(display->device, display->SSBO, &mem_reqs);
+
+	VkMemoryAllocateInfo alloc_info = {0};
+	alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	alloc_info.allocationSize = mem_reqs.size;
+	alloc_info.memoryTypeIndex = findMemoryTypeIndex(display, mem_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+	if (vkAllocateMemory(display->device, &alloc_info, NULL, &display->SSBOMemory) != VK_SUCCESS) {
+		printf("failed to allocate SSBO memory.\n");
+		return;
+	}
+	vkBindBufferMemory(display->device, display->SSBO, display->SSBOMemory, 0);
+
+	printf("SSBO created.\n");
 }
 
 
