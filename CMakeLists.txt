@@ -31,27 +31,20 @@ if(WIN32)
 endif()
 
 
-find_program(GLSLC_EXECUTABLE NAMES glslc HINTS "$ENV{VULKAN_SDK}/Bin" "$ENV{VULKAN_SDK}/bin")
-if(NOT GLSLC_EXECUTABLE)
-    message(FATAL_ERROR "glslc not found; install the Vulkan SDK or set VULKAN_SDK")
+find_program(DXC_EXECUTABLE NAMES dxc HINTS "$ENV{VULKAN_SDK}/Bin" "$ENV{VULKAN_SDK}/bin")
+if(NOT DXC_EXECUTABLE)
+    message(FATAL_ERROR "dxc not found; install the Vulkan SDK or set VULKAN_SDK")
 endif()
 
-set(VERT_SPV ${CMAKE_SOURCE_DIR}/shaders/vert.spv)
-set(FRAG_SPV ${CMAKE_SOURCE_DIR}/shaders/frag.spv)
+set(COMPUTE_SPV ${CMAKE_SOURCE_DIR}/shaders/compute.spv)
 
+# Complile shaders at build for now
 add_custom_command(
-    OUTPUT ${VERT_SPV}
-    COMMAND ${GLSLC_EXECUTABLE} ${CMAKE_SOURCE_DIR}/shaders/shader.vert -o ${VERT_SPV}
-    DEPENDS ${CMAKE_SOURCE_DIR}/shaders/shader.vert
-    COMMENT "Compiling shader.vert to vert.spv"
+    OUTPUT ${COMPUTE_SPV}
+    COMMAND ${DXC_EXECUTABLE} -spirv -T cs_6_0 -E main ${CMAKE_SOURCE_DIR}/shaders/shader.hlsl -Fo ${COMPUTE_SPV}
+    DEPENDS ${CMAKE_SOURCE_DIR}/shaders/shader.hlsl
+    COMMENT "Compiling shader.hlsl to compute.spv"
 )
 
-add_custom_command(
-    OUTPUT ${FRAG_SPV}
-    COMMAND ${GLSLC_EXECUTABLE} ${CMAKE_SOURCE_DIR}/shaders/shader.frag -o ${FRAG_SPV}
-    DEPENDS ${CMAKE_SOURCE_DIR}/shaders/shader.frag
-    COMMENT "Compiling shader.frag to frag.spv"
-)
-
-add_custom_target(shaders DEPENDS ${VERT_SPV} ${FRAG_SPV})
+add_custom_target(shaders DEPENDS ${COMPUTE_SPV})
 add_dependencies(tracerlite shaders)
