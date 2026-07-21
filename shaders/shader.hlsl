@@ -1,6 +1,12 @@
 [[vk::binding(1, 0)]] ByteAddressBuffer voxelsIn;
 
+struct Material {
+    float4 color;
+};
+[[vk::binding(2, 0)]] StructuredBuffer<Material> materials;
+
 [[vk::binding(3, 0)]]
+
 cbuffer shader_data {
     float4 _camera_position;
     float4 _camera_rotation;
@@ -8,7 +14,8 @@ cbuffer shader_data {
     int2 _screen_size;
     int pixel_count;
 
-    float _fov;
+    float _tan_fov_v;
+    float _tan_fov_h;
 
     int3 _voxel_grid_size;
 };
@@ -71,15 +78,10 @@ Ray CreateRay(float3 origin, float3 direction) {
 }
 
 Ray CreateCameraRay(float x, float y) {
-    float n = 0.1f;
-    float fov_v = (_fov / 2.0f);
-    float ratio = (float(_screen_size.x) / float(_screen_size.y));
-    float fov_h = atan(tan(fov_v) * ratio);
-
     x = (x - 0.5f) * 2.0f;
     y = (y - 0.5f) * 2.0f;
 
-    float3 plane = float3(x * tan(fov_h) * n, y * tan(fov_v) * n, n);
+    float3 plane = float3(x * _tan_fov_h, y * _tan_fov_v, 1.0f);
     float3 direction = RotateVector(normalize(plane), _camera_rotation.xyz);
 
     return CreateRay(_camera_position.xyz, direction);
@@ -117,16 +119,16 @@ Hit CastRay(Ray ray) {
     hit.type = 0;
     hit.dist = FLT_INF;
 
+    if (x < 0 || x >= _voxel_grid_size.x ||
+        y < 0 || y >= _voxel_grid_size.y ||
+        z < 0 || z >= _voxel_grid_size.z) {
+        return hit;
+    }
+
     float tCurrent = 0.0f;
 
     while (hit.type == 0) {
         if (tCurrent > MAX_RAY_DISTANCE) {
-            return hit;
-        }
-
-        if (x < 0 || x >= _voxel_grid_size.x ||
-            y < 0 || y >= _voxel_grid_size.y ||
-            z < 0 || z >= _voxel_grid_size.z) {
             return hit;
         }
 
@@ -143,11 +145,13 @@ Hit CastRay(Ray ray) {
                 tCurrent = tMaxX;
                 x = x + stepX;
                 tMaxX = tMaxX + tDeltaX;
+                if (x < 0 || x >= _voxel_grid_size.x) { return hit; }
             }
             else {
                 tCurrent = tMaxZ;
                 z = z + stepZ;
                 tMaxZ = tMaxZ + tDeltaZ;
+                if (z < 0 || z >= _voxel_grid_size.z) { return hit; }
             }
         }
         else {
@@ -155,11 +159,13 @@ Hit CastRay(Ray ray) {
                 tCurrent = tMaxY;
                 y = y + stepY;
                 tMaxY = tMaxY + tDeltaY;
+                if (y < 0 || y >= _voxel_grid_size.y) { return hit; }
             }
             else {
                 tCurrent = tMaxZ;
                 z = z + stepZ;
                 tMaxZ = tMaxZ + tDeltaZ;
+                if (z < 0 || z >= _voxel_grid_size.z) { return hit; }
             }
         }
     }
@@ -185,6 +191,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID) {
 
     float shade = 1.0f - alpha;
 
-    float4 color = hit.type ? float4(shade * (hit.type == 1), shade * (hit.type == 2), shade * (hit.type == 3), 1.0f) : float4(0.0f, 0.0f, 0.0f, 1.0f);
+    float4 color = hit.type ? float4(shade * materials[hit.type].color.rgb, 1.0f) : float4(0.0f, 0.0f, 0.0f, 1.0f);
     outputImage[pixel] = color;
 }

@@ -14,6 +14,7 @@
 #include "GLFW/glfw3.h"
 
 #include "world.h"
+#include "camera.h"
 
 
 int main(int argc, char* argv[]) {
@@ -27,10 +28,8 @@ int main(int argc, char* argv[]) {
 	float roll = 0.0f; 
 	float pitch = 0.0f;
 	float yaw = 0.0f;
-	const float mouseSensitivity = 0.0025f;
+	const float mouseSensitivity = 0.0007f;
 	const float pitchLimit = 1.55334f;
-
-	ShaderDataUBO* shaderData = (ShaderDataUBO*)display.shaderDataMapped;
 
 	double lastFrameTime = glfwGetTime();
 	double fpsTimer = 0.0;
@@ -39,6 +38,7 @@ int main(int argc, char* argv[]) {
 
 
 	World wrld = create_world(VOXEL_GRID_DIM * VOXEL_GRID_DIM * VOXEL_GRID_DIM);
+	Camera cam = create_cam((3.14159265f / 180.0f), (float)display.width / (float)display.height);
 
 	uploadWorldToSSBO(&display, &wrld);
 
@@ -73,9 +73,11 @@ int main(int argc, char* argv[]) {
 		if (pitch > pitchLimit) { pitch = pitchLimit; }
 		if (pitch < -pitchLimit) { pitch = -pitchLimit; }
 
-		shaderData->camera_rotation[0] = pitch;
-		shaderData->camera_rotation[1] = yaw;
-		shaderData->camera_rotation[2] = roll;
+
+		cam.angle[0] = pitch;
+		cam.angle[1] = yaw;
+		cam.angle[2] = roll;
+
 
 		
 		float forwardX = sinf(yaw);
@@ -94,14 +96,10 @@ int main(int argc, char* argv[]) {
 		if (glfwGetKey(display.window, GLFW_KEY_D) == GLFW_PRESS) { moveX += rightX; moveZ += rightZ; }
 		if (glfwGetKey(display.window, GLFW_KEY_A) == GLFW_PRESS) { moveX -= rightX; moveZ -= rightZ; }
 
-		if (glfwGetKey(display.window, GLFW_KEY_E) == GLFW_PRESS) { shaderData->camera_position[1] += 5 * (float)frameTime;}
-		if (glfwGetKey(display.window, GLFW_KEY_Q) == GLFW_PRESS) { shaderData->camera_position[1] -= 5 * (float)frameTime;}
+		if (glfwGetKey(display.window, GLFW_KEY_E) == GLFW_PRESS) { cam.pos[1] += 5 * (float)frameTime;}
+		if (glfwGetKey(display.window, GLFW_KEY_Q) == GLFW_PRESS) { cam.pos[1] -= 5 * (float)frameTime;}
 
 		if (glfwGetKey(display.window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) { moveSpeed = 25.0f;}
-
-
-		
-		
 
 		float moveLenSq = moveX * moveX + moveZ * moveZ;
 		if (moveLenSq > 0.0f) {
@@ -109,11 +107,15 @@ int main(int argc, char* argv[]) {
 			moveX *= invLen;
 			moveZ *= invLen;
 
-			shaderData->camera_position[0] += moveX * moveSpeed * (float)frameTime;
-			shaderData->camera_position[2] += moveZ * moveSpeed * (float)frameTime;
+			cam.pos[0] += moveX * moveSpeed * (float)frameTime;
+			cam.pos[2] += moveZ * moveSpeed * (float)frameTime;
 		}
 
+		update_camera(&display, &cam);
+
 		display_run(&display);
+
+		
 	}
 
 	display_close(&display);

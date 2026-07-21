@@ -1,4 +1,5 @@
 #include "vulkan_simple.h"
+#include <math.h>
 
 
 //private
@@ -27,6 +28,7 @@ bool display_init(Display_t* display) {
     createOutputimage(display);
     createShaderDataUBO(display);
     createBuffer(display, (VkDeviceSize)VOXEL_GRID_DIM * VOXEL_GRID_DIM * VOXEL_GRID_DIM * sizeof(uint8_t));
+    createMaterialsBuffer(display);
     createSwapchain(display);
 
 	createShaders(display);
@@ -44,7 +46,12 @@ bool display_init(Display_t* display) {
     initial_shader_data.screen_size[0] = (int32_t)display->width;
     initial_shader_data.screen_size[1] = (int32_t)display->height;
     initial_shader_data.pixel_count = (int32_t)(display->width * display->height);
-    initial_shader_data.fov = 90.0f * (3.14159265f / 180.0f);
+    float fov = 103.0f * (3.14159265f / 180.0f);
+    float fov_v = fov / 2.0f;
+    float ratio = (float)display->width / (float)display->height;
+    float fov_h = atanf(tanf(fov_v) * ratio);
+    initial_shader_data.tan_fov_v = tanf(fov_v);
+    initial_shader_data.tan_fov_h = tanf(fov_h);
     initial_shader_data.voxel_grid_size[0] = VOXEL_GRID_DIM;
     initial_shader_data.voxel_grid_size[1] = VOXEL_GRID_DIM;
     initial_shader_data.voxel_grid_size[2] = VOXEL_GRID_DIM;
@@ -114,6 +121,10 @@ bool display_close(Display_t* display) {
     vkDestroyBuffer(display->device, display->shaderDataUBO, NULL);
     vkFreeMemory(display->device, display->shaderDataUBOMemory, NULL);
     printf("shader data UBO destroyed.\n");
+
+    vkDestroyBuffer(display->device, display->materialsBuffer, NULL);
+    vkFreeMemory(display->device, display->materialsBufferMemory, NULL);
+    printf("materials buffer destroyed.\n");
 
     vkDestroyDevice(display->device, NULL);
     printf("device destroyed.\n");
@@ -548,7 +559,7 @@ void createSwapchain(Display_t* display) {
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(display->physicalDevice,display->surface,&surface_capabilities);
     printf("fetched capabilities from surface.\n");
 
-    uint32_t requestedImageCount = surface_capabilities.minImageCount < 2U ? 2U : surface_capabilities.minImageCount;
+    uint32_t requestedImageCount = surface_capabilities.minImageCount < 3U ? 3U : surface_capabilities.minImageCount;
     if (surface_capabilities.maxImageCount > 0) {
         requestedImageCount = requestedImageCount > surface_capabilities.maxImageCount ? surface_capabilities.maxImageCount :  requestedImageCount;
     }
@@ -600,7 +611,7 @@ void createSwapchain(Display_t* display) {
 	swap_create_info.pNext=NULL;
 	swap_create_info.flags=0;
 	swap_create_info.surface=display->surface;
-	swap_create_info.minImageCount=surface_capabilities.minImageCount+1;
+	swap_create_info.minImageCount=requestedImageCount;
 	swap_create_info.imageFormat=chosen_format.format;
 	swap_create_info.imageColorSpace=chosen_format.colorSpace;
 	swap_create_info.imageExtent = actual_extent;
@@ -839,7 +850,7 @@ Pipeline_t createGraphicsPipeline(Display_t* display) {
 Pipeline_t createComputePipeline(Display_t* display) {
 	Pipeline_t pipeline = {0};
 
-	VkDescriptorSetLayoutBinding bindings[3] = {0};
+	VkDescriptorSetLayoutBinding bindings[4] = {0};
 	bindings[0].binding = 1;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	bindings[0].descriptorCount = 1;
@@ -855,9 +866,14 @@ Pipeline_t createComputePipeline(Display_t* display) {
 	bindings[2].descriptorCount = 1;
 	bindings[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
+	bindings[3].binding = 2;
+	bindings[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	bindings[3].descriptorCount = 1;
+	bindings[3].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
 	VkDescriptorSetLayoutCreateInfo set_layout_info = {0};
 	set_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	set_layout_info.bindingCount = 3;
+	set_layout_info.bindingCount = 4;
 	set_layout_info.pBindings = bindings;
 
 	if (vkCreateDescriptorSetLayout(display->device, &set_layout_info, NULL, &display->computeDescriptorSetLayout) != VK_SUCCESS) {
@@ -909,7 +925,7 @@ void createComputeDescriptorSet(Display_t* display) {
 
 	VkDescriptorPoolSize pool_sizes[3] = {0};
 	pool_sizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	pool_sizes[0].descriptorCount = 1;
+	pool_sizes[0].descriptorCount = 2;
 	pool_sizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	pool_sizes[1].descriptorCount = 1;
 	pool_sizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
@@ -951,7 +967,12 @@ void createComputeDescriptorSet(Display_t* display) {
 	image_info.imageView = display->outputImageView;
 	image_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
-	VkWriteDescriptorSet writes[3] = {0};
+	VkDescriptorBufferInfo materials_info = {0};
+	materials_info.buffer = display->materialsBuffer;
+	materials_info.offset = 0;
+	materials_info.range = VK_WHOLE_SIZE;
+
+	VkWriteDescriptorSet writes[4] = {0};
 	writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 	writes[0].dstSet = display->computeDescriptorSet;
 	writes[0].dstBinding = 1;
@@ -973,7 +994,14 @@ void createComputeDescriptorSet(Display_t* display) {
 	writes[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 	writes[2].pImageInfo = &image_info;
 
-	vkUpdateDescriptorSets(display->device, 3, writes, 0, NULL);
+	writes[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes[3].dstSet = display->computeDescriptorSet;
+	writes[3].dstBinding = 2;
+	writes[3].descriptorCount = 1;
+	writes[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	writes[3].pBufferInfo = &materials_info;
+
+	vkUpdateDescriptorSets(display->device, 4, writes, 0, NULL);
 
 	printf("compute descriptor set created.\n");
 }
@@ -1284,6 +1312,46 @@ void createBuffer(Display_t* display, VkDeviceSize size) {
 	printf("SSBO created.\n");
 }
 
+void createMaterialsBuffer(Display_t* display) {
+
+	VkBufferCreateInfo buffer_info = {0};
+	buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	buffer_info.size = (VkDeviceSize)MAX_MATERIALS * sizeof(Material);
+	buffer_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+	buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	if (vkCreateBuffer(display->device, &buffer_info, NULL, &display->materialsBuffer) != VK_SUCCESS) {
+		printf("failed to create materials buffer.\n");
+		return;
+	}
+
+	VkMemoryRequirements mem_reqs;
+	vkGetBufferMemoryRequirements(display->device, display->materialsBuffer, &mem_reqs);
+
+	VkMemoryAllocateInfo alloc_info = {0};
+	alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	alloc_info.allocationSize = mem_reqs.size;
+	alloc_info.memoryTypeIndex = findMemoryTypeIndex(display, mem_reqs.memoryTypeBits,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+	if (vkAllocateMemory(display->device, &alloc_info, NULL, &display->materialsBufferMemory) != VK_SUCCESS) {
+		printf("failed to allocate materials buffer memory.\n");
+		return;
+	}
+	vkBindBufferMemory(display->device, display->materialsBuffer, display->materialsBufferMemory, 0);
+
+	vkMapMemory(display->device, display->materialsBufferMemory, 0, buffer_info.size, 0, &display->materialsMapped);
+
+	Material* materials = (Material*)display->materialsMapped;
+	memset(materials, 0, (size_t)buffer_info.size);
+
+	materials[1].color[0] = 1.0f; materials[1].color[1] = 0.0f; materials[1].color[2] = 0.0f; materials[1].color[3] = 1.0f;
+	materials[2].color[0] = 0.0f; materials[2].color[1] = 1.0f; materials[2].color[2] = 0.0f; materials[2].color[3] = 1.0f;
+	materials[3].color[0] = 0.0f; materials[3].color[1] = 0.0f; materials[3].color[2] = 1.0f; materials[3].color[3] = 1.0f;
+
+	printf("materials buffer created.\n");
+}
+
 void createShaderDataUBO(Display_t* display) {
 
 	VkBufferCreateInfo buffer_info = {0};
@@ -1396,6 +1464,20 @@ void uploadWorldToSSBO(Display_t* display, World* world) {
 	vkFreeMemory(display->device, staging_memory, NULL);
 
 	printf("world uploaded to SSBO.\n");
+}
+
+
+
+void update_camera(Display_t* display, Camera* c) {
+	ShaderDataUBO* ubo = (ShaderDataUBO*)display->shaderDataMapped;
+
+	ubo->camera_position[0] = c->pos[0];
+	ubo->camera_position[1] = c->pos[1];
+	ubo->camera_position[2] = c->pos[2];
+
+	ubo->camera_rotation[0] = c->angle[0];
+	ubo->camera_rotation[1] = c->angle[1];
+	ubo->camera_rotation[2] = c->angle[2];
 }
 
 

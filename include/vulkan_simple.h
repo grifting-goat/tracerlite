@@ -14,6 +14,8 @@
 #include "stb_image.h"
 #include "world.h"
 
+#include "camera.h"
+
 
 // Configuration constants
 #define VULKAN_VERSION        VK_API_VERSION_1_4
@@ -21,7 +23,8 @@
 #define SWAPCHAIN_FORMAT      VK_FORMAT_B8G8R8A8_SRGB
 #define DEPTH_FORMAT          VK_FORMAT_D32_SFLOAT
 #define OUTPUT_IMAGE_FORMAT   VK_FORMAT_R8G8B8A8_UNORM
-#define VOXEL_GRID_DIM         1024U // placeholder 
+#define VOXEL_GRID_DIM         512U // placeholder
+#define MAX_MATERIALS          256U // one per possible voxel byte value
 
 
 // inspired by https://github.com/nickenchev/modern-vulkan
@@ -38,10 +41,15 @@ typedef struct {
 	float camera_rotation[4];
 	int32_t screen_size[2];
 	int32_t pixel_count;
-	float fov;
+	float tan_fov_v;
+	float tan_fov_h;
 	int32_t voxel_grid_size[3];
-	int32_t _pad0;
 } ShaderDataUBO;
+
+// mirrors the HLSL StructuredBuffer<Material> element layout
+typedef struct {
+	float color[4];
+} Material;
 
 typedef struct {
 	uint32_t lastFrameId;
@@ -88,7 +96,7 @@ typedef struct {
 	VkImage outputImage;
 	VkImageView outputImageView;
 	VkDeviceMemory outputImageMemory;
-	Pipeline_t gfxPipeline;
+	Pipeline_t gfxPipeline; //not using currently
 
 	Pipeline_t computePipeline;
 	VkDescriptorSetLayout computeDescriptorSetLayout;
@@ -105,6 +113,10 @@ typedef struct {
 	VkBuffer shaderDataUBO;
 	VkDeviceMemory shaderDataUBOMemory;
 	void* shaderDataMapped;
+
+	VkBuffer materialsBuffer;
+	VkDeviceMemory materialsBufferMemory;
+	void* materialsMapped;
 
 
 	//shader
@@ -145,6 +157,8 @@ void createBuffer(Display_t* display, VkDeviceSize size);
 
 void createShaderDataUBO(Display_t* display);
 
+void createMaterialsBuffer(Display_t* display);
+
 void uploadWorldToSSBO(Display_t* display, World* world);
 
 
@@ -159,6 +173,10 @@ void createSyncResources(Display_t* display);
 void createCommandBuffers(Display_t* display);
 
 void render(Display_t* display);
+
+
+
+void update_camera(Display_t* display, Camera* c);
 
 
 
